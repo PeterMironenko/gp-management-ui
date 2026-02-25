@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (
 )
 
 from apiclient import ApiClient
+from patientwindow import FilterPatientsDialog, PatientDialog
 
 
 SYSTEM_LOCALE = QLocale.system()
@@ -498,17 +499,39 @@ class AdminWindow(QMainWindow):
 
         controls_layout = QHBoxLayout()
         controls_layout.addStretch()
-        refresh_button = QPushButton("Refresh")
+
+        create_button = QPushButton()
+        create_icon = QIcon.fromTheme("list-add")
+        if not create_icon.isNull():
+            create_button.setIcon(create_icon)
+        else:
+            create_button.setText("+")
+        create_button.setToolTip("Create")
+        create_button.clicked.connect(self.open_create_patient_dialog)
+
+        refresh_button = QPushButton()
+        refresh_icon = QIcon.fromTheme("view-refresh")
+        if not refresh_icon.isNull():
+            refresh_button.setIcon(refresh_icon)
+        else:
+            refresh_button.setText("⟳")
+        refresh_button.setToolTip("Refresh")
         refresh_button.clicked.connect(self.refresh_patients)
+
+        filter_button = QPushButton("Filter")
+        filter_button.clicked.connect(self.open_filter_patients_dialog)
+
+        controls_layout.addWidget(create_button)
         controls_layout.addWidget(refresh_button)
+        controls_layout.addWidget(filter_button)
         layout.addLayout(controls_layout)
 
         layout.addWidget(QLabel("Existing Patients:"))
 
         self.patients_table = QTableWidget()
-        self.patients_table.setColumnCount(6)
+        self.patients_table.setColumnCount(7)
         self.patients_table.setHorizontalHeaderLabels(
-            ["ID", "First Name", "Last Name", "DOB", "Email", "Staff ID"]
+            ["ID", "First Name", "Last Name", "DOB", "Email", "Assigned to", "Position"]
         )
         self.patients_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.patients_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -516,6 +539,9 @@ class AdminWindow(QMainWindow):
         self.patients_table.verticalHeader().setVisible(False)
         self.patients_table.horizontalHeader().setStretchLastSection(True)
         self.patients_table.itemSelectionChanged.connect(self.on_patient_selected)
+        self.patients_table.cellDoubleClicked.connect(lambda _row, _col: self.open_update_patient_dialog())
+        self.patients_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.patients_table.customContextMenuRequested.connect(self._open_patients_context_menu)
         layout.addWidget(self.patients_table)
 
         tab.setLayout(layout)
@@ -608,6 +634,8 @@ class AdminWindow(QMainWindow):
             self.users_table.setItem(row_index, 3, last_name_item)
             self.users_table.setItem(row_index, 4, position_item)
 
+        self.users_table.resizeColumnsToContents()
+
     def refresh_patients(self) -> None:
         try:
             self.all_patients = self.api_client.list_patients()
@@ -618,8 +646,23 @@ class AdminWindow(QMainWindow):
     def _render_patients(self, patients: List[dict]) -> None:
         self.patients_table.setRowCount(len(patients))
 
+        staff_name_by_id: dict[int, str] = {}
+        staff_position_by_id: dict[int, str] = {}
+        for user in self.all_users:
+            staff = user.get("staff") or {}
+            staff_id = staff.get("id")
+            if staff_id is None:
+                continue
+            first_name = (staff.get("first_name") or "").strip()
+            last_name = (staff.get("last_name") or "").strip()
+            full_name = f"{first_name} {last_name}".strip()
+            staff_name_by_id[int(staff_id)] = full_name or "-"
+            staff_position_by_id[int(staff_id)] = (staff.get("position") or "-").strip() or "-"
+
         for row_index, patient in enumerate(patients):
-            self.patients_table.setItem(row_index, 0, QTableWidgetItem(str(patient.get("id", "-"))))
+            patient_id_item = QTableWidgetItem(str(patient.get("id", "-")))
+            patient_id_item.setData(Qt.ItemDataRole.UserRole, patient.get("id"))
+            self.patients_table.setItem(row_index, 0, patient_id_item)
             self.patients_table.setItem(row_index, 1, QTableWidgetItem(patient.get("first_name") or "-"))
             self.patients_table.setItem(row_index, 2, QTableWidgetItem(patient.get("last_name") or "-"))
             self.patients_table.setItem(
@@ -628,19 +671,163 @@ class AdminWindow(QMainWindow):
                 QTableWidgetItem(_iso_date_to_locale_text(patient.get("date_of_birth") or "")),
             )
             self.patients_table.setItem(row_index, 4, QTableWidgetItem(patient.get("email") or "-"))
-            self.patients_table.setItem(row_index, 5, QTableWidgetItem(str(patient.get("staff_id", "-"))))
+            patient_staff_id = patient.get("staff_id")
+            assigned_to = "-"
+            assigned_position = "-"
+            if patient_staff_id is not None:
+                assigned_to = staff_name_by_id.get(int(patient_staff_id), "-")
+                assigned_position = staff_position_by_id.get(int(patient_staff_id), "-")
+            self.patients_table.setItem(row_index, 5, QTableWidgetItem(assigned_to))
+            self.patients_table.setItem(row_index, 6, QTableWidgetItem(assigned_position))
+
+        self.patients_table.resizeColumnsToContents()
 
     def on_patient_selected(self) -> None:
         current_row = self.patients_table.currentRow()
         if current_row >= 0:
             id_item = self.patients_table.item(current_row, 0)
-            if id_item and id_item.text().isdigit():
-                self.selected_patient_id = int(id_item.text())
+            if id_item is not None:
+                patient_id = id_item.data(Qt.ItemDataRole.UserRole)
+                if patient_id is not None:
+                    self.selected_patient_id = int(patient_id)
+
+    def _matches_patient_filter(self, patient: dict, criteria: dict) -> bool:
+        def contains(value: str, query: str) -> bool:
+            return query.lower() in (value or "").lower()
+
+        if criteria.get("first_name") and not contains(patient.get("first_name", ""), criteria["first_name"]):
+            return False
+        if criteria.get("last_name") and not contains(patient.get("last_name", ""), criteria["last_name"]):
+            return False
+        if criteria.get("email") and not contains(patient.get("email", ""), criteria["email"]):
+            return False
+        if criteria.get("mobile_phone") and not contains(patient.get("mobile_phone", ""), criteria["mobile_phone"]):
+            return False
+        if criteria.get("address_city") and not contains(patient.get("address_city", ""), criteria["address_city"]):
+            return False
+
+        return True
+
+    def open_filter_patients_dialog(self) -> None:
+        dialog = FilterPatientsDialog(self)
+        if dialog.exec_() == QDialog.Accepted and dialog.payload:
+            filtered_patients = [
+                patient for patient in self.all_patients if self._matches_patient_filter(patient, dialog.payload)
+            ]
+            self._render_patients(filtered_patients)
+
+    def _open_patients_context_menu(self, pos) -> None:
+        item = self.patients_table.itemAt(pos)
+        if item is None:
+            return
+        self.patients_table.selectRow(item.row())
+
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete")
+        selected_action = menu.exec_(self.patients_table.viewport().mapToGlobal(pos))
+        if selected_action == delete_action:
+            self.open_delete_patient_dialog()
+
+    def _get_selected_patient(self) -> tuple[int, dict] | None:
+        current_row = self.patients_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Warning", "Please select a patient first.")
+            return None
+
+        id_item = self.patients_table.item(current_row, 0)
+        if id_item is None:
+            QMessageBox.warning(self, "Warning", "Selected row has no patient ID.")
+            return None
+
+        patient_id = id_item.data(Qt.ItemDataRole.UserRole)
+        if patient_id is None:
+            QMessageBox.warning(self, "Warning", "Selected row has invalid patient ID.")
+            return None
+
+        patient = next((row for row in self.all_patients if row.get("id") == int(patient_id)), None)
+        if patient is None:
+            QMessageBox.warning(self, "Warning", "Selected patient is not available anymore.")
+            return None
+
+        return int(patient_id), patient
+
+    def _resolve_default_staff_id(self) -> int | None:
+        try:
+            return self.api_client.get_current_staff_id()
+        except Exception:
+            pass
+
+        for user in self.all_users:
+            staff = user.get("staff") or {}
+            staff_id = staff.get("id")
+            if staff_id is not None:
+                return int(staff_id)
+        return None
+
+    def open_create_patient_dialog(self) -> None:
+        staff_id = self._resolve_default_staff_id()
+        if staff_id is None:
+            QMessageBox.warning(self, "Warning", "No staff record available to assign patient.")
+            return
+
+        dialog = PatientDialog("Create Patient", staff_id=staff_id, parent=self)
+        if dialog.exec_() == QDialog.Accepted and dialog.payload:
+            try:
+                self.api_client.create_patient(dialog.payload)
+                QMessageBox.information(self, "Success", "Patient created successfully.")
+                self.refresh_patients()
+                self.refresh_assignment_data()
+            except Exception as exc:
+                QMessageBox.critical(self, "Create Failed", f"Error: {str(exc)}")
+
+    def open_update_patient_dialog(self) -> None:
+        selected = self._get_selected_patient()
+        if not selected:
+            return
+
+        patient_id, patient = selected
+        staff_id = patient.get("staff_id")
+        if staff_id is None:
+            staff_id = self._resolve_default_staff_id()
+        if staff_id is None:
+            QMessageBox.warning(self, "Warning", "No staff record available for patient update.")
+            return
+
+        dialog = PatientDialog("Update Patient", staff_id=int(staff_id), patient=patient, parent=self)
+        if dialog.exec_() == QDialog.Accepted and dialog.payload:
+            try:
+                self.api_client.update_patient(patient_id, dialog.payload)
+                QMessageBox.information(self, "Success", "Patient updated successfully.")
+                self.refresh_patients()
+                self.refresh_assignment_data()
+            except Exception as exc:
+                QMessageBox.critical(self, "Update Failed", f"Error: {str(exc)}")
+
+    def open_delete_patient_dialog(self) -> None:
+        selected = self._get_selected_patient()
+        if not selected:
+            return
+
+        patient_id, patient = selected
+        patient_text = (
+            f"ID: {patient.get('id', '-')} | Name: {patient.get('first_name', '-') } {patient.get('last_name', '-') }"
+        )
+        dialog = DeleteUserDialog(patient_text, self)
+        dialog.setWindowTitle("Delete Patient")
+        if dialog.exec_() == QDialog.Accepted:
+            try:
+                self.api_client.delete_patient(patient_id)
+                QMessageBox.information(self, "Success", "Patient deleted successfully.")
+                self.refresh_patients()
+                self.refresh_assignment_data()
+            except Exception as exc:
+                QMessageBox.critical(self, "Delete Failed", f"Error: {str(exc)}")
 
     def refresh_assignment_data(self) -> None:
         try:
             users = self.api_client.list_users()
             patients = self.api_client.list_patients()
+            self.all_users = users
             self._render_assignment_staff(users)
             self._render_assignment_patients(patients)
         except Exception as exc:
@@ -661,6 +848,8 @@ class AdminWindow(QMainWindow):
             self.assignment_staff_table.setItem(row_index, 1, QTableWidgetItem(user.get("username") or "-"))
             self.assignment_staff_table.setItem(row_index, 2, QTableWidgetItem(full_name))
 
+        self.assignment_staff_table.resizeColumnsToContents()
+
     def _render_assignment_patients(self, patients: List[dict]) -> None:
         self.assignment_patients_table.setRowCount(len(patients))
 
@@ -672,6 +861,8 @@ class AdminWindow(QMainWindow):
             self.assignment_patients_table.setItem(row_index, 1, QTableWidgetItem(patient.get("first_name") or "-"))
             self.assignment_patients_table.setItem(row_index, 2, QTableWidgetItem(patient.get("last_name") or "-"))
             self.assignment_patients_table.setItem(row_index, 3, QTableWidgetItem(str(patient.get("staff_id", "-"))))
+
+        self.assignment_patients_table.resizeColumnsToContents()
 
     def assign_selected_patient(self) -> None:
         staff_row = self.assignment_staff_table.currentRow()
