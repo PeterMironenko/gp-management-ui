@@ -173,6 +173,8 @@ class ApiClient:
     def update_patient(self, patient_id: int, patient_data: dict) -> dict:
         url = f"{self.base_url}/patient/{patient_id}"
         payload = self._clean_optional_fields(patient_data)
+        if "staff_id" in patient_data and patient_data.get("staff_id") is None:
+            payload["staff_id"] = None
         resp = requests.put(url, json=payload, headers=self._headers(needs_auth=True))
         if resp.status_code != 200:
             message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None

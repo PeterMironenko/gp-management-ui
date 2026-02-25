@@ -406,6 +406,8 @@ class AdminWindow(QMainWindow):
         self.users: List[dict] = []
         self.positions: List[str] = []
         self.all_patients: List[dict] = []
+        self.assignment_staff_users: List[dict] = []
+        self.assignment_patients: List[dict] = []
         self.selected_user_id: Optional[int] = None
         self.selected_patient_id: Optional[int] = None
 
@@ -559,44 +561,58 @@ class AdminWindow(QMainWindow):
         layout.addWidget(title_label)
 
         controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel("Staff Member:"))
+        self.assignment_staff_combo = QComboBox()
+        self.assignment_staff_combo.currentIndexChanged.connect(self._on_assignment_staff_changed)
+        controls_layout.addWidget(self.assignment_staff_combo)
         controls_layout.addStretch()
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(self.refresh_assignment_data)
-        assign_button = QPushButton("Assign Selected Patient")
-        assign_button.clicked.connect(self.assign_selected_patient)
         controls_layout.addWidget(refresh_button)
-        controls_layout.addWidget(assign_button)
         layout.addLayout(controls_layout)
 
-        list_layout = QHBoxLayout()
+        panes_layout = QHBoxLayout()
 
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(QLabel("Staff Users"))
-        self.assignment_staff_table = QTableWidget()
-        self.assignment_staff_table.setColumnCount(3)
-        self.assignment_staff_table.setHorizontalHeaderLabels(["Staff ID", "Username", "Name"])
-        self.assignment_staff_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.assignment_staff_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.assignment_staff_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.assignment_staff_table.verticalHeader().setVisible(False)
-        self.assignment_staff_table.horizontalHeader().setStretchLastSection(True)
-        left_layout.addWidget(self.assignment_staff_table)
+        all_patients_layout = QVBoxLayout()
+        all_patients_layout.addWidget(QLabel("All Patients"))
+        self.assignment_all_patients_table = QTableWidget()
+        self.assignment_all_patients_table.setColumnCount(4)
+        self.assignment_all_patients_table.setHorizontalHeaderLabels(["Patient ID", "First Name", "Last Name", "Current Staff ID"])
+        self.assignment_all_patients_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.assignment_all_patients_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.assignment_all_patients_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.assignment_all_patients_table.verticalHeader().setVisible(False)
+        self.assignment_all_patients_table.horizontalHeader().setStretchLastSection(True)
+        all_patients_layout.addWidget(self.assignment_all_patients_table)
 
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(QLabel("Patients"))
-        self.assignment_patients_table = QTableWidget()
-        self.assignment_patients_table.setColumnCount(4)
-        self.assignment_patients_table.setHorizontalHeaderLabels(["Patient ID", "First Name", "Last Name", "Current Staff ID"])
-        self.assignment_patients_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.assignment_patients_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.assignment_patients_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.assignment_patients_table.verticalHeader().setVisible(False)
-        self.assignment_patients_table.horizontalHeader().setStretchLastSection(True)
-        right_layout.addWidget(self.assignment_patients_table)
+        arrows_layout = QVBoxLayout()
+        arrows_layout.addStretch()
+        self.assignment_add_button = QPushButton("→")
+        self.assignment_add_button.setToolTip("Assign selected patient to selected staff")
+        self.assignment_add_button.clicked.connect(self.assign_patient_to_selected_staff)
+        self.assignment_remove_button = QPushButton("←")
+        self.assignment_remove_button.setToolTip("Remove selected patient from selected staff")
+        self.assignment_remove_button.clicked.connect(self.unassign_patient_from_selected_staff)
+        arrows_layout.addWidget(self.assignment_add_button)
+        arrows_layout.addWidget(self.assignment_remove_button)
+        arrows_layout.addStretch()
 
-        list_layout.addLayout(left_layout)
-        list_layout.addLayout(right_layout)
-        layout.addLayout(list_layout)
+        staff_patients_layout = QVBoxLayout()
+        staff_patients_layout.addWidget(QLabel("Selected Staff Member Patients"))
+        self.assignment_staff_patients_table = QTableWidget()
+        self.assignment_staff_patients_table.setColumnCount(3)
+        self.assignment_staff_patients_table.setHorizontalHeaderLabels(["Patient ID", "First Name", "Last Name"])
+        self.assignment_staff_patients_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.assignment_staff_patients_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.assignment_staff_patients_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.assignment_staff_patients_table.verticalHeader().setVisible(False)
+        self.assignment_staff_patients_table.horizontalHeader().setStretchLastSection(True)
+        staff_patients_layout.addWidget(self.assignment_staff_patients_table)
+
+        panes_layout.addLayout(all_patients_layout)
+        panes_layout.addLayout(arrows_layout)
+        panes_layout.addLayout(staff_patients_layout)
+        layout.addLayout(panes_layout)
 
         tab.setLayout(layout)
         return tab
@@ -828,69 +844,142 @@ class AdminWindow(QMainWindow):
             users = self.api_client.list_users()
             patients = self.api_client.list_patients()
             self.all_users = users
-            self._render_assignment_staff(users)
-            self._render_assignment_patients(patients)
+            self.assignment_staff_users = [user for user in users if (user.get("staff") or {}).get("id") is not None]
+            self.assignment_patients = patients
+            self._render_assignment_staff_combo()
+            self._render_assignment_all_patients()
+            self._render_assignment_selected_staff_patients()
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to load assignment data: {str(exc)}")
 
-    def _render_assignment_staff(self, users: List[dict]) -> None:
-        staff_users = [user for user in users if (user.get("staff") or {}).get("id") is not None]
-        self.assignment_staff_table.setRowCount(len(staff_users))
+    def _render_assignment_staff_combo(self) -> None:
+        previous_staff_id = self._get_selected_assignment_staff_id()
 
-        for row_index, user in enumerate(staff_users):
+        self.assignment_staff_combo.blockSignals(True)
+        self.assignment_staff_combo.clear()
+
+        for user in self.assignment_staff_users:
             staff = user.get("staff") or {}
             staff_id = staff.get("id")
-            full_name = f"{staff.get('first_name', '')} {staff.get('last_name', '')}".strip() or "-"
+            if staff_id is None:
+                continue
+            first_name = (staff.get("first_name") or "").strip()
+            last_name = (staff.get("last_name") or "").strip()
+            full_name = f"{first_name} {last_name}".strip() or "-"
+            label = f"{full_name} ({user.get('username') or '-'})"
+            self.assignment_staff_combo.addItem(label, int(staff_id))
 
-            staff_id_item = QTableWidgetItem(str(staff_id))
-            staff_id_item.setData(Qt.ItemDataRole.UserRole, staff_id)
-            self.assignment_staff_table.setItem(row_index, 0, staff_id_item)
-            self.assignment_staff_table.setItem(row_index, 1, QTableWidgetItem(user.get("username") or "-"))
-            self.assignment_staff_table.setItem(row_index, 2, QTableWidgetItem(full_name))
+        if self.assignment_staff_combo.count() > 0:
+            index_to_select = 0
+            if previous_staff_id is not None:
+                for idx in range(self.assignment_staff_combo.count()):
+                    if self.assignment_staff_combo.itemData(idx) == previous_staff_id:
+                        index_to_select = idx
+                        break
+            self.assignment_staff_combo.setCurrentIndex(index_to_select)
 
-        self.assignment_staff_table.resizeColumnsToContents()
+        self.assignment_staff_combo.blockSignals(False)
 
-    def _render_assignment_patients(self, patients: List[dict]) -> None:
-        self.assignment_patients_table.setRowCount(len(patients))
+    def _get_selected_assignment_staff_id(self) -> Optional[int]:
+        if self.assignment_staff_combo.count() == 0:
+            return None
+        staff_id = self.assignment_staff_combo.currentData()
+        if staff_id is None:
+            return None
+        return int(staff_id)
 
-        for row_index, patient in enumerate(patients):
+    def _render_assignment_all_patients(self) -> None:
+        self.assignment_all_patients_table.setRowCount(len(self.assignment_patients))
+
+        for row_index, patient in enumerate(self.assignment_patients):
             patient_id = patient.get("id")
             patient_id_item = QTableWidgetItem(str(patient_id))
             patient_id_item.setData(Qt.ItemDataRole.UserRole, patient_id)
-            self.assignment_patients_table.setItem(row_index, 0, patient_id_item)
-            self.assignment_patients_table.setItem(row_index, 1, QTableWidgetItem(patient.get("first_name") or "-"))
-            self.assignment_patients_table.setItem(row_index, 2, QTableWidgetItem(patient.get("last_name") or "-"))
-            self.assignment_patients_table.setItem(row_index, 3, QTableWidgetItem(str(patient.get("staff_id", "-"))))
+            self.assignment_all_patients_table.setItem(row_index, 0, patient_id_item)
+            self.assignment_all_patients_table.setItem(row_index, 1, QTableWidgetItem(patient.get("first_name") or "-"))
+            self.assignment_all_patients_table.setItem(row_index, 2, QTableWidgetItem(patient.get("last_name") or "-"))
+            self.assignment_all_patients_table.setItem(row_index, 3, QTableWidgetItem(str(patient.get("staff_id", "-"))))
 
-        self.assignment_patients_table.resizeColumnsToContents()
+        self.assignment_all_patients_table.resizeColumnsToContents()
 
-    def assign_selected_patient(self) -> None:
-        staff_row = self.assignment_staff_table.currentRow()
-        patient_row = self.assignment_patients_table.currentRow()
+    def _render_assignment_selected_staff_patients(self) -> None:
+        selected_staff_id = self._get_selected_assignment_staff_id()
+        staff_patients = []
+        if selected_staff_id is not None:
+            staff_patients = [
+                patient for patient in self.assignment_patients if patient.get("staff_id") == selected_staff_id
+            ]
 
-        if staff_row < 0 or patient_row < 0:
-            QMessageBox.warning(self, "Warning", "Select one staff user and one patient first.")
+        self.assignment_staff_patients_table.setRowCount(len(staff_patients))
+
+        for row_index, patient in enumerate(staff_patients):
+            patient_id = patient.get("id")
+            patient_id_item = QTableWidgetItem(str(patient_id))
+            patient_id_item.setData(Qt.ItemDataRole.UserRole, patient_id)
+            self.assignment_staff_patients_table.setItem(row_index, 0, patient_id_item)
+            self.assignment_staff_patients_table.setItem(row_index, 1, QTableWidgetItem(patient.get("first_name") or "-"))
+            self.assignment_staff_patients_table.setItem(row_index, 2, QTableWidgetItem(patient.get("last_name") or "-"))
+
+        self.assignment_staff_patients_table.resizeColumnsToContents()
+
+    def _on_assignment_staff_changed(self, _index: int) -> None:
+        self._render_assignment_selected_staff_patients()
+
+    def assign_patient_to_selected_staff(self) -> None:
+        selected_staff_id = self._get_selected_assignment_staff_id()
+        if selected_staff_id is None:
+            QMessageBox.warning(self, "Warning", "Please select a staff member first.")
             return
 
-        staff_item = self.assignment_staff_table.item(staff_row, 0)
-        patient_item = self.assignment_patients_table.item(patient_row, 0)
-        if staff_item is None or patient_item is None:
-            QMessageBox.warning(self, "Warning", "Invalid selection.")
+        selected_row = self.assignment_all_patients_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "Warning", "Please select a patient from the all-patients list.")
             return
 
-        staff_id = staff_item.data(Qt.ItemDataRole.UserRole)
+        patient_item = self.assignment_all_patients_table.item(selected_row, 0)
+        if patient_item is None:
+            QMessageBox.warning(self, "Warning", "Invalid patient selection.")
+            return
+
         patient_id = patient_item.data(Qt.ItemDataRole.UserRole)
-        if staff_id is None or patient_id is None:
-            QMessageBox.warning(self, "Warning", "Selected row is missing identifiers.")
+        if patient_id is None:
+            QMessageBox.warning(self, "Warning", "Selected row is missing patient ID.")
             return
 
         try:
-            self.api_client.update_patient(int(patient_id), {"staff_id": int(staff_id)})
-            QMessageBox.information(self, "Success", "Patient assigned successfully.")
+            self.api_client.update_patient(int(patient_id), {"staff_id": int(selected_staff_id)})
             self.refresh_patients()
             self.refresh_assignment_data()
         except Exception as exc:
             QMessageBox.critical(self, "Assignment Failed", f"Error: {str(exc)}")
+
+    def unassign_patient_from_selected_staff(self) -> None:
+        selected_staff_id = self._get_selected_assignment_staff_id()
+        if selected_staff_id is None:
+            QMessageBox.warning(self, "Warning", "Please select a staff member first.")
+            return
+
+        selected_row = self.assignment_staff_patients_table.currentRow()
+        if selected_row < 0:
+            QMessageBox.warning(self, "Warning", "Please select a patient from the staff member patient list.")
+            return
+
+        patient_item = self.assignment_staff_patients_table.item(selected_row, 0)
+        if patient_item is None:
+            QMessageBox.warning(self, "Warning", "Invalid patient selection.")
+            return
+
+        patient_id = patient_item.data(Qt.ItemDataRole.UserRole)
+        if patient_id is None:
+            QMessageBox.warning(self, "Warning", "Selected row is missing patient ID.")
+            return
+
+        try:
+            self.api_client.update_patient(int(patient_id), {"staff_id": None})
+            self.refresh_patients()
+            self.refresh_assignment_data()
+        except Exception as exc:
+            QMessageBox.critical(self, "Unassign Failed", f"Error: {str(exc)}")
 
     def _matches_filter(self, user: dict, criteria: dict) -> bool:
         staff = user.get("staff") or {}
