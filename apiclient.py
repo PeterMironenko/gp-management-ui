@@ -223,10 +223,9 @@ class ApiClient:
             raise RuntimeError(message or f"Failed to delete appointment: {resp.status_code}")
 
     # --- Drug management ---
-    def list_drugs(self, patient_id: int | None = None) -> List[dict]:
+    def list_drugs(self) -> List[dict]:
         url = f"{self.base_url}/drug"
-        params = {"patient_id": patient_id} if patient_id is not None else None
-        resp = requests.get(url, headers=self._headers(needs_auth=True), params=params)
+        resp = requests.get(url, headers=self._headers(needs_auth=True))
         if resp.status_code != 200:
             message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
             raise RuntimeError(message or f"Failed to load drugs: {resp.status_code}")

@@ -396,6 +396,106 @@ class SearchUsersDialog(QDialog):
         self.accept()
 
 
+class DrugDialog(QDialog):
+    def __init__(
+        self,
+        title: str,
+        record: Optional[dict] = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.payload: Optional[dict] = None
+        record = record or {}
+
+        layout = QGridLayout()
+
+        self.drug_name = QLineEdit(record.get("drug_name", ""))
+        self.generic_name = QLineEdit(record.get("generic_name", ""))
+        self.form = QLineEdit(record.get("form", ""))
+        self.strength = QLineEdit(record.get("strength", ""))
+        self.manufacturer = QLineEdit(record.get("manufacturer", ""))
+        self.description = QLineEdit(record.get("description", ""))
+
+        layout.addWidget(QLabel("Drug Name:"), 0, 0)
+        layout.addWidget(self.drug_name, 0, 1)
+        layout.addWidget(QLabel("Generic Name:"), 1, 0)
+        layout.addWidget(self.generic_name, 1, 1)
+        layout.addWidget(QLabel("Form:"), 2, 0)
+        layout.addWidget(self.form, 2, 1)
+        layout.addWidget(QLabel("Strength:"), 3, 0)
+        layout.addWidget(self.strength, 3, 1)
+        layout.addWidget(QLabel("Manufacturer:"), 4, 0)
+        layout.addWidget(self.manufacturer, 4, 1)
+        layout.addWidget(QLabel("Description:"), 5, 0)
+        layout.addWidget(self.description, 5, 1)
+
+        buttons = QHBoxLayout()
+        save_btn = QPushButton("Save")
+        cancel_btn = QPushButton("Cancel")
+        save_btn.clicked.connect(self._on_submit)
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(save_btn)
+        buttons.addWidget(cancel_btn)
+        layout.addLayout(buttons, 6, 0, 1, 2)
+
+        self.setLayout(layout)
+
+    def _on_submit(self) -> None:
+        drug_name = self.drug_name.text().strip()
+        if not drug_name:
+            QMessageBox.warning(self, "Validation Error", "Drug name is required.")
+            return
+
+        self.payload = {
+            "drug_name": drug_name,
+            "generic_name": self.generic_name.text().strip() or None,
+            "form": self.form.text().strip() or None,
+            "strength": self.strength.text().strip() or None,
+            "manufacturer": self.manufacturer.text().strip() or None,
+            "description": self.description.text().strip() or None,
+        }
+        self.accept()
+
+
+class FilterDrugsDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Filter Drugs")
+        self.payload: Optional[dict] = None
+
+        layout = QGridLayout()
+        self.drug_name = QLineEdit()
+        self.generic_name = QLineEdit()
+        self.manufacturer = QLineEdit()
+
+        layout.addWidget(QLabel("Drug Name:"), 0, 0)
+        layout.addWidget(self.drug_name, 0, 1)
+        layout.addWidget(QLabel("Generic Name:"), 1, 0)
+        layout.addWidget(self.generic_name, 1, 1)
+        layout.addWidget(QLabel("Manufacturer:"), 2, 0)
+        layout.addWidget(self.manufacturer, 2, 1)
+
+        buttons = QHBoxLayout()
+        apply_btn = QPushButton("Apply")
+        cancel_btn = QPushButton("Cancel")
+        apply_btn.clicked.connect(self._on_submit)
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(apply_btn)
+        buttons.addWidget(cancel_btn)
+        layout.addLayout(buttons, 3, 0, 1, 2)
+
+        self.setLayout(layout)
+
+    def _on_submit(self) -> None:
+        self.payload = {
+            "drug_name": self.drug_name.text().strip() or None,
+            "generic_name": self.generic_name.text().strip() or None,
+            "manufacturer": self.manufacturer.text().strip() or None,
+        }
+        self.accept()
+
+
 class AdminWindow(QMainWindow):
     def __init__(self, api_client: ApiClient) -> None:
         super().__init__()
@@ -406,6 +506,7 @@ class AdminWindow(QMainWindow):
         self.users: List[dict] = []
         self.positions: List[str] = []
         self.all_patients: List[dict] = []
+        self.all_drugs: List[dict] = []
         self.assignment_staff_users: List[dict] = []
         self.assignment_patients: List[dict] = []
         self.selected_user_id: Optional[int] = None
@@ -414,6 +515,7 @@ class AdminWindow(QMainWindow):
         self._build_ui()
         self.refresh_users()
         self.refresh_patients()
+        self.refresh_drugs()
         self.refresh_assignment_data()
 
     def _build_ui(self) -> None:
@@ -423,6 +525,7 @@ class AdminWindow(QMainWindow):
         tabs = QTabWidget()
         tabs.addTab(self._build_user_management_tab(), "User Management")
         tabs.addTab(self._build_patient_management_tab(), "Patient Management")
+        tabs.addTab(self._build_drug_management_tab(), "Drug Management")
         tabs.addTab(self._build_patient_assignment_tab(), "Patient Assignment")
         main_layout.addWidget(tabs)
 
@@ -545,6 +648,66 @@ class AdminWindow(QMainWindow):
         self.patients_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.patients_table.customContextMenuRequested.connect(self._open_patients_context_menu)
         layout.addWidget(self.patients_table)
+
+        tab.setLayout(layout)
+        return tab
+
+    def _build_drug_management_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout()
+
+        title_label = QLabel("Drug Management")
+        title_font = title_label.font()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        layout.addWidget(title_label)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.addStretch()
+
+        create_button = QPushButton()
+        create_icon = QIcon.fromTheme("list-add")
+        if not create_icon.isNull():
+            create_button.setIcon(create_icon)
+        else:
+            create_button.setText("+")
+        create_button.setToolTip("Create")
+        create_button.clicked.connect(self.open_create_drug_dialog)
+
+        refresh_button = QPushButton()
+        refresh_icon = QIcon.fromTheme("view-refresh")
+        if not refresh_icon.isNull():
+            refresh_button.setIcon(refresh_icon)
+        else:
+            refresh_button.setText("⟳")
+        refresh_button.setToolTip("Refresh")
+        refresh_button.clicked.connect(self.refresh_drugs)
+
+        filter_button = QPushButton("Filter")
+        filter_button.clicked.connect(self.open_filter_drugs_dialog)
+
+        controls_layout.addWidget(create_button)
+        controls_layout.addWidget(refresh_button)
+        controls_layout.addWidget(filter_button)
+        layout.addLayout(controls_layout)
+
+        layout.addWidget(QLabel("Existing Drugs:"))
+
+        self.drugs_table = QTableWidget()
+        self.drugs_table.setColumnCount(6)
+        self.drugs_table.setHorizontalHeaderLabels(
+            ["ID", "Drug Name", "Generic Name", "Form", "Strength", "Manufacturer"]
+        )
+        self.drugs_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.drugs_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.drugs_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.drugs_table.verticalHeader().setVisible(False)
+        self.drugs_table.horizontalHeader().setStretchLastSection(True)
+        self.drugs_table.cellDoubleClicked.connect(lambda _row, _col: self.open_update_drug_dialog())
+        self.drugs_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.drugs_table.customContextMenuRequested.connect(self._open_drugs_context_menu)
+        layout.addWidget(self.drugs_table)
 
         tab.setLayout(layout)
         return tab
@@ -838,6 +1001,130 @@ class AdminWindow(QMainWindow):
                 self.refresh_assignment_data()
             except Exception as exc:
                 QMessageBox.critical(self, "Delete Failed", f"Error: {str(exc)}")
+
+    def refresh_drugs(self) -> None:
+        try:
+            self.all_drugs = self.api_client.list_drugs()
+            self._render_drugs(self.all_drugs)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"Failed to load drugs: {str(exc)}")
+
+    def _render_drugs(self, drugs: List[dict]) -> None:
+        self.drugs_table.setRowCount(len(drugs))
+
+        for row_index, drug in enumerate(drugs):
+            drug_id_item = QTableWidgetItem(str(drug.get("id", "-")))
+            drug_id_item.setData(Qt.ItemDataRole.UserRole, drug.get("id"))
+
+            self.drugs_table.setItem(row_index, 0, drug_id_item)
+            self.drugs_table.setItem(row_index, 1, QTableWidgetItem(drug.get("drug_name") or "-"))
+            self.drugs_table.setItem(row_index, 2, QTableWidgetItem(drug.get("generic_name") or "-"))
+            self.drugs_table.setItem(row_index, 3, QTableWidgetItem(drug.get("form") or "-"))
+            self.drugs_table.setItem(row_index, 4, QTableWidgetItem(drug.get("strength") or "-"))
+            self.drugs_table.setItem(row_index, 5, QTableWidgetItem(drug.get("manufacturer") or "-"))
+
+        self.drugs_table.resizeColumnsToContents()
+
+    def _matches_drug_filter(self, drug: dict, criteria: dict) -> bool:
+        def contains(value: str, query: str) -> bool:
+            return query.lower() in (value or "").lower()
+
+        if criteria.get("drug_name") and not contains(drug.get("drug_name", ""), criteria["drug_name"]):
+            return False
+        if criteria.get("generic_name") and not contains(drug.get("generic_name", ""), criteria["generic_name"]):
+            return False
+        if criteria.get("manufacturer") and not contains(drug.get("manufacturer", ""), criteria["manufacturer"]):
+            return False
+
+        return True
+
+    def open_filter_drugs_dialog(self) -> None:
+        dialog = FilterDrugsDialog(self)
+        if dialog.exec_() == QDialog.Accepted and dialog.payload:
+            filtered_drugs = [
+                drug for drug in self.all_drugs if self._matches_drug_filter(drug, dialog.payload)
+            ]
+            self._render_drugs(filtered_drugs)
+
+    def _open_drugs_context_menu(self, pos) -> None:
+        item = self.drugs_table.itemAt(pos)
+        if item is None:
+            return
+        self.drugs_table.selectRow(item.row())
+
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete")
+        selected_action = menu.exec_(self.drugs_table.viewport().mapToGlobal(pos))
+        if selected_action == delete_action:
+            self.open_delete_drug_dialog()
+
+    def _get_selected_drug(self) -> tuple[int, dict] | None:
+        current_row = self.drugs_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Warning", "Please select a drug first.")
+            return None
+
+        id_item = self.drugs_table.item(current_row, 0)
+        if id_item is None:
+            QMessageBox.warning(self, "Warning", "Selected row has no drug ID.")
+            return None
+
+        drug_id = id_item.data(Qt.ItemDataRole.UserRole)
+        if drug_id is None:
+            QMessageBox.warning(self, "Warning", "Selected row has invalid drug ID.")
+            return None
+
+        drug = next((row for row in self.all_drugs if row.get("id") == int(drug_id)), None)
+        if drug is None:
+            QMessageBox.warning(self, "Warning", "Selected drug is not available anymore.")
+            return None
+
+        return int(drug_id), drug
+
+    def open_create_drug_dialog(self) -> None:
+        dialog = DrugDialog("Create Drug", parent=self)
+        if dialog.exec_() == QDialog.Accepted and dialog.payload:
+            try:
+                self.api_client.create_drug(dialog.payload)
+                QMessageBox.information(self, "Success", "Drug created successfully.")
+                self.refresh_drugs()
+            except Exception as exc:
+                QMessageBox.critical(self, "Create Failed", f"Error: {str(exc)}")
+
+    def open_update_drug_dialog(self) -> None:
+        selected = self._get_selected_drug()
+        if not selected:
+            return
+
+        _, drug = selected
+        dialog = DrugDialog("Update Drug", record=drug, parent=self)
+        if dialog.exec_() == QDialog.Accepted and dialog.payload:
+            try:
+                self.api_client.update_drug(int(drug["id"]), dialog.payload)
+                QMessageBox.information(self, "Success", "Drug updated successfully.")
+                self.refresh_drugs()
+            except Exception as exc:
+                QMessageBox.critical(self, "Update Failed", f"Error: {str(exc)}")
+
+    def open_delete_drug_dialog(self) -> None:
+        selected = self._get_selected_drug()
+        if not selected:
+            return
+
+        drug_id, drug = selected
+        prompt = (
+            f"Delete drug {drug.get('drug_name', '-')} "
+            f"(ID {drug_id})?"
+        )
+        if QMessageBox.question(self, "Confirm Delete", prompt) != QMessageBox.Yes:
+            return
+
+        try:
+            self.api_client.delete_drug(drug_id)
+            QMessageBox.information(self, "Success", "Drug deleted successfully.")
+            self.refresh_drugs()
+        except Exception as exc:
+            QMessageBox.critical(self, "Delete Failed", f"Error: {str(exc)}")
 
     def refresh_assignment_data(self) -> None:
         try:
