@@ -416,6 +416,9 @@ class DrugDialog(QDialog):
         self.strength = QLineEdit(record.get("strength", ""))
         self.manufacturer = QLineEdit(record.get("manufacturer", ""))
         self.description = QLineEdit(record.get("description", ""))
+        self.is_approval_required = QComboBox()
+        self.is_approval_required.addItem("Yes", True)
+        self.is_approval_required.addItem("No", False)
 
         layout.addWidget(QLabel("Drug Name:"), 0, 0)
         layout.addWidget(self.drug_name, 0, 1)
@@ -429,6 +432,8 @@ class DrugDialog(QDialog):
         layout.addWidget(self.manufacturer, 4, 1)
         layout.addWidget(QLabel("Description:"), 5, 0)
         layout.addWidget(self.description, 5, 1)
+        layout.addWidget(QLabel("Approval Required:"), 6, 0)
+        layout.addWidget(self.is_approval_required, 6, 1)
 
         buttons = QHBoxLayout()
         save_btn = QPushButton("Save")
@@ -437,7 +442,7 @@ class DrugDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(save_btn)
         buttons.addWidget(cancel_btn)
-        layout.addLayout(buttons, 6, 0, 1, 2)
+        layout.addLayout(buttons, 7, 0, 1, 2)
 
         self.setLayout(layout)
 
@@ -454,6 +459,7 @@ class DrugDialog(QDialog):
             "strength": self.strength.text().strip() or None,
             "manufacturer": self.manufacturer.text().strip() or None,
             "description": self.description.text().strip() or None,
+            "is_approval_required": self.is_approval_required.currentData(),
         }
         self.accept()
 
@@ -468,6 +474,10 @@ class FilterDrugsDialog(QDialog):
         self.drug_name = QLineEdit()
         self.generic_name = QLineEdit()
         self.manufacturer = QLineEdit()
+        self.is_approval_required = QComboBox()
+        self.is_approval_required.addItem("Any", None)
+        self.is_approval_required.addItem("Yes", True)
+        self.is_approval_required.addItem("No", False)
 
         layout.addWidget(QLabel("Drug Name:"), 0, 0)
         layout.addWidget(self.drug_name, 0, 1)
@@ -475,6 +485,8 @@ class FilterDrugsDialog(QDialog):
         layout.addWidget(self.generic_name, 1, 1)
         layout.addWidget(QLabel("Manufacturer:"), 2, 0)
         layout.addWidget(self.manufacturer, 2, 1)
+        layout.addWidget(QLabel("Approval Required:"), 3, 0)
+        layout.addWidget(self.is_approval_required, 3, 1)
 
         buttons = QHBoxLayout()
         apply_btn = QPushButton("Apply")
@@ -483,7 +495,7 @@ class FilterDrugsDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         buttons.addWidget(apply_btn)
         buttons.addWidget(cancel_btn)
-        layout.addLayout(buttons, 3, 0, 1, 2)
+        layout.addLayout(buttons, 4, 0, 1, 2)
 
         self.setLayout(layout)
 
@@ -492,6 +504,7 @@ class FilterDrugsDialog(QDialog):
             "drug_name": self.drug_name.text().strip() or None,
             "generic_name": self.generic_name.text().strip() or None,
             "manufacturer": self.manufacturer.text().strip() or None,
+            "is_approval_required": self.is_approval_required.currentData(),
         }
         self.accept()
 
@@ -695,10 +708,10 @@ class AdminWindow(QMainWindow):
         layout.addWidget(QLabel("Existing Drugs:"))
 
         self.drugs_table = QTableWidget()
-        self.drugs_table.setColumnCount(6)
-        self.drugs_table.setHorizontalHeaderLabels(
-            ["ID", "Drug Name", "Generic Name", "Form", "Strength", "Manufacturer"]
-        )
+        horizontal_labels = ["ID", "Drug Name", "Generic Name", "Form", "Strength", "Manufacturer", "Approval Required"]
+        self.drugs_table.setColumnCount(len(horizontal_labels))
+        self.drugs_table.setHorizontalHeaderLabels(horizontal_labels)
+        self.drugs_table.horizontalHeaderItem(len(horizontal_labels) - 1).setTextAlignment(Qt.AlignCenter)
         self.drugs_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.drugs_table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.drugs_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -1022,6 +1035,9 @@ class AdminWindow(QMainWindow):
             self.drugs_table.setItem(row_index, 3, QTableWidgetItem(drug.get("form") or "-"))
             self.drugs_table.setItem(row_index, 4, QTableWidgetItem(drug.get("strength") or "-"))
             self.drugs_table.setItem(row_index, 5, QTableWidgetItem(drug.get("manufacturer") or "-"))
+            approval_item = QTableWidgetItem("Yes" if drug.get("is_approval_required") else "No")
+            approval_item.setTextAlignment(Qt.AlignCenter)
+            self.drugs_table.setItem(row_index, 6, approval_item)
 
         self.drugs_table.resizeColumnsToContents()
 
@@ -1035,6 +1051,9 @@ class AdminWindow(QMainWindow):
             return False
         if criteria.get("manufacturer") and not contains(drug.get("manufacturer", ""), criteria["manufacturer"]):
             return False
+        if criteria.get("is_approval_required") is not None:
+            if bool(drug.get("is_approval_required")) != bool(criteria["is_approval_required"]):
+                return False
 
         return True
 

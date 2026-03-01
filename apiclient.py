@@ -59,57 +59,6 @@ class ApiClient:
         if  len(self.access_token) == 0:
             raise RuntimeError("No access token received from server.")
 
-    # --- Stores ---
-    def list_stores(self) -> List[dict]:
-        url = f"{self.base_url}/store"
-        print("self.access_token:", self.access_token)
-        print("self._headers(needs_auth=True):", self._headers(needs_auth=True))
-        resp = requests.get(url, headers=self._headers(needs_auth=True))
-        if resp.status_code != 200:
-            raise RuntimeError(f"Failed to load stores: {resp.status_code}")
-        return resp.json()
-
-    def add_store(self, name: str) -> dict:
-        url = f"{self.base_url}/store/{name}"
-        resp = requests.post(url, headers=self._headers(needs_auth=True))
-        if resp.status_code not in (200, 201):
-            message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
-            raise RuntimeError(message or f"Failed to add store: {resp.status_code}")
-        return resp.json()
-
-    def delete_store(self, name: str) -> None:
-        url = f"{self.base_url}/store/{name}"
-        resp = requests.delete(url, headers=self._headers())
-        if resp.status_code != 200:
-            message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
-            raise RuntimeError(message or f"Failed to delete store: {resp.status_code}")
-
-    # --- Items ---
-    def list_items(self) -> List[dict]:
-        url = f"{self.base_url}/item"
-        print("list_items: self._headers(needs_auth=True):", self._headers(needs_auth=True))
-        resp = requests.get(url, headers=self._headers(needs_auth=True))
-        if resp.status_code != 200:
-            message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
-            raise RuntimeError(message or f"Failed to load items: {resp.status_code}")
-        return resp.json()
-
-    def add_item(self, name: str, price: float, store_id: int) -> dict:
-        url = f"{self.base_url}/item/{name}"
-        payload = {"price": price, "store_id": store_id}
-        resp = requests.post(url, json=payload, headers=self._headers(needs_auth=True))
-        if resp.status_code not in (200, 201):
-            message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
-            raise RuntimeError(message or f"Failed to add item: {resp.status_code}")
-        return resp.json()
-
-    def delete_item(self, name: str) -> None:
-        url = f"{self.base_url}/item/{name}"
-        resp = requests.delete(url, headers=self._headers(needs_auth=True))
-        if resp.status_code != 200:
-            message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
-            raise RuntimeError(message or f"Failed to delete item: {resp.status_code}")
-        
     # --- User management ---
     def list_positions(self) -> List[dict]:
         url = f"{self.base_url}/position"
