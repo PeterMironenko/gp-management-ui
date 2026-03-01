@@ -339,6 +339,10 @@ class ApiClient:
     def create_medication(self, medication_data: dict) -> dict:
         url = f"{self.base_url}/medication"
         payload = self._clean_optional_fields(medication_data)
+        if "staff_id" in medication_data and medication_data.get("staff_id") is None:
+            payload["staff_id"] = None
+        if "is_approved" in medication_data and medication_data.get("is_approved") is None:
+            payload["is_approved"] = None
         resp = requests.post(url, json=payload, headers=self._headers(needs_auth=True))
         if resp.status_code not in (200, 201):
             message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
@@ -348,6 +352,10 @@ class ApiClient:
     def update_medication(self, medication_id: int, medication_data: dict) -> dict:
         url = f"{self.base_url}/medication/{medication_id}"
         payload = self._clean_optional_fields(medication_data)
+        if "staff_id" in medication_data and medication_data.get("staff_id") is None:
+            payload["staff_id"] = None
+        if "is_approved" in medication_data and medication_data.get("is_approved") is None:
+            payload["is_approved"] = None
         resp = requests.put(url, json=payload, headers=self._headers(needs_auth=True))
         if resp.status_code != 200:
             message = resp.json().get("message") if resp.headers.get("Content-Type", "").startswith("application/json") else None
