@@ -520,6 +520,7 @@ class AdminWindow(QMainWindow):
         self.positions: List[str] = []
         self.all_patients: List[dict] = []
         self.all_drugs: List[dict] = []
+        self.approval_required_records: List[dict] = []
         self.assignment_staff_users: List[dict] = []
         self.assignment_patients: List[dict] = []
         self.selected_user_id: Optional[int] = None
@@ -529,6 +530,7 @@ class AdminWindow(QMainWindow):
         self.refresh_users()
         self.refresh_patients()
         self.refresh_drugs()
+        self.refresh_approval_required_records()
         self.refresh_assignment_data()
 
     def _build_ui(self) -> None:
@@ -539,6 +541,7 @@ class AdminWindow(QMainWindow):
         tabs.addTab(self._build_user_management_tab(), "User Management")
         tabs.addTab(self._build_patient_management_tab(), "Patient Management")
         tabs.addTab(self._build_drug_management_tab(), "Drug Management")
+        tabs.addTab(self._build_approval_required_tab(), "Approval Required")
         tabs.addTab(self._build_patient_assignment_tab(), "Patient Assignment")
         main_layout.addWidget(tabs)
 
@@ -793,6 +796,56 @@ class AdminWindow(QMainWindow):
         tab.setLayout(layout)
         return tab
 
+    def _build_approval_required_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout()
+
+        title_label = QLabel("Approval Required")
+        title_font = title_label.font()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        layout.addWidget(title_label)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.addStretch()
+        refresh_button = QPushButton()
+        refresh_icon = QIcon.fromTheme("view-refresh")
+        if not refresh_icon.isNull():
+            refresh_button.setIcon(refresh_icon)
+        else:
+            refresh_button.setText("⟳")
+        refresh_button.setToolTip("Refresh")
+        refresh_button.clicked.connect(self.refresh_approval_required_records)
+        controls_layout.addWidget(refresh_button)
+        layout.addLayout(controls_layout)
+
+        layout.addWidget(QLabel("Medication approvals for drugs requiring approval:"))
+
+        self.approval_required_table = QTableWidget()
+        headers = [
+            "Medication ID",
+            "Drug",
+            "Patient ID",
+            "Patient First Name",
+            "Patient Surname",
+            "Dosage",
+            "Frequency",
+            "Start Date",
+            "Action",
+        ]
+        self.approval_required_table.setColumnCount(len(headers))
+        self.approval_required_table.setHorizontalHeaderLabels(headers)
+        self.approval_required_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.approval_required_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.approval_required_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.approval_required_table.verticalHeader().setVisible(False)
+        self.approval_required_table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.approval_required_table)
+
+        tab.setLayout(layout)
+        return tab
+
     def refresh_users(self) -> None:
         try:
             self.positions = [row["position"] for row in self.api_client.list_positions()]
@@ -1021,6 +1074,112 @@ class AdminWindow(QMainWindow):
             self._render_drugs(self.all_drugs)
         except Exception as exc:
             QMessageBox.critical(self, "Error", f"Failed to load drugs: {str(exc)}")
+
+    def refresh_approval_required_records(self) -> None:
+        try:
+            drugs = self.api_client.list_drugs()
+            medications = self.api_client.list_medications()
+            patients = self.api_client.list_patients()
+            self.all_drugs = drugs
+            self.all_patients = patients
+
+            required_drug_ids = {
+                int(drug.get("id"))
+                for drug in drugs
+                if drug.get("id") is not None and bool(drug.get("is_approval_required"))
+            }
+            self.approval_required_records = [
+                medication
+                for medication in medications
+                if medication.get("drug_id") in required_drug_ids and not bool(medication.get("is_approved"))
+            ]
+            self._render_approval_required_records(self.approval_required_records)
+        except Exception as exc:
+            QMessageBox.critical(self, "Error", f"Failed to load approval-required medications: {str(exc)}")
+
+    def _render_approval_required_records(self, medications: List[dict]) -> None:
+        self.approval_required_table.setRowCount(len(medications))
+
+        drug_name_by_id = {
+            int(drug.get("id")): str(drug.get("drug_name") or "-")
+            for drug in self.all_drugs
+            if drug.get("id") is not None
+        }
+        patient_name_by_id = {
+            int(patient.get("id")): (
+                str(patient.get("first_name") or "-"),
+                str(patient.get("last_name") or "-"),
+            )
+            for patient in self.all_patients
+            if patient.get("id") is not None
+        }
+
+        for row_index, medication in enumerate(medications):
+            medication_id = medication.get("id")
+            patient_id = medication.get("patient_id")
+            drug_id = medication.get("drug_id")
+            drug_name = drug_name_by_id.get(int(drug_id), "-") if drug_id is not None else "-"
+            patient_first_name, patient_last_name = (
+                patient_name_by_id.get(int(patient_id), ("-", "-")) if patient_id is not None else ("-", "-")
+            )
+
+            id_item = QTableWidgetItem(str(medication_id if medication_id is not None else "-"))
+            id_item.setData(Qt.ItemDataRole.UserRole, medication)
+
+            self.approval_required_table.setItem(row_index, 0, id_item)
+            self.approval_required_table.setItem(row_index, 1, QTableWidgetItem(drug_name))
+            self.approval_required_table.setItem(row_index, 2, QTableWidgetItem(str(patient_id if patient_id is not None else "-")))
+            self.approval_required_table.setItem(row_index, 3, QTableWidgetItem(patient_first_name))
+            self.approval_required_table.setItem(row_index, 4, QTableWidgetItem(patient_last_name))
+            self.approval_required_table.setItem(row_index, 5, QTableWidgetItem(str(medication.get("dosage") or "-")))
+            self.approval_required_table.setItem(row_index, 6, QTableWidgetItem(str(medication.get("frequency") or "-")))
+            self.approval_required_table.setItem(row_index, 7, QTableWidgetItem(str(medication.get("start_date") or "-")))
+
+            approve_button = QPushButton("Approve")
+            approve_button.clicked.connect(
+                lambda _checked=False, med=medication: self._approve_medication(med)
+            )
+
+            action_widget = QWidget()
+            action_layout = QHBoxLayout(action_widget)
+            action_layout.setContentsMargins(0, 0, 0, 0)
+            action_layout.addWidget(approve_button)
+            action_layout.addStretch()
+            self.approval_required_table.setCellWidget(row_index, 8, action_widget)
+
+        self.approval_required_table.resizeColumnsToContents()
+
+    def _build_medication_update_payload(self, medication: dict, is_approved: bool) -> dict:
+        return {
+            "patient_id": medication.get("patient_id"),
+            "staff_id": medication.get("staff_id"),
+            "drug_id": medication.get("drug_id"),
+            "dosage": medication.get("dosage"),
+            "frequency": medication.get("frequency"),
+            "route": medication.get("route"),
+            "start_date": medication.get("start_date"),
+            "end_date": medication.get("end_date"),
+            "notes": medication.get("notes"),
+            "is_approved": is_approved,
+        }
+
+    def _approve_medication(self, medication: dict) -> None:
+        medication_id = medication.get("id")
+        if medication_id is None:
+            QMessageBox.warning(self, "Warning", "Medication ID is missing.")
+            return
+
+        payload = self._build_medication_update_payload(medication, True)
+        if payload.get("patient_id") is None or not payload.get("dosage") or not payload.get("frequency") or not payload.get("start_date"):
+            QMessageBox.warning(self, "Warning", "Medication record is missing required fields for update.")
+            return
+
+        try:
+            self.api_client.update_medication(int(medication_id), payload)
+            QMessageBox.information(self, "Success", "Medication approval status updated.")
+            self.refresh_approval_required_records()
+        except Exception as exc:
+            QMessageBox.critical(self, "Update Failed", f"Error: {str(exc)}")
 
     def _render_drugs(self, drugs: List[dict]) -> None:
         self.drugs_table.setRowCount(len(drugs))
