@@ -384,14 +384,22 @@ class AppointmentsWindow(QDialog):
             f"{patient.get('first_name', '-')} {patient.get('last_name', '-')}"
         )
         layout.addWidget(header)
-        layout.addWidget(_create_list_header("ID    Date & Time             Duration Reason                   Location"))
-
-        self.appointments_list = QListWidget()
-        self.appointments_list.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        self.appointments_list.itemDoubleClicked.connect(lambda _item: self.open_update_dialog())
-        self.appointments_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.appointments_list.customContextMenuRequested.connect(self._open_context_menu)
-        layout.addWidget(self.appointments_list)
+        self.appointments_table = QTableWidget(0, 5)
+        self.appointments_table.setHorizontalHeaderLabels(["ID", "Date & Time", "Duration", "Reason", "Location"])
+        self.appointments_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.appointments_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.appointments_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.appointments_table.verticalHeader().setVisible(False)
+        self.appointments_table.cellDoubleClicked.connect(lambda _row, _col: self.open_update_dialog())
+        self.appointments_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.appointments_table.customContextMenuRequested.connect(self._open_context_menu)
+        header_widget = self.appointments_table.horizontalHeader()
+        header_widget.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(3, QHeaderView.Stretch)
+        header_widget.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        layout.addWidget(self.appointments_table)
 
         top_controls = QHBoxLayout()
         top_controls.addStretch()
@@ -431,50 +439,42 @@ class AppointmentsWindow(QDialog):
 
     def _render_appointments(self, appointments: List[dict]) -> None:
         self.appointments = appointments
-        self.appointments_list.clear()
+        self.appointments_table.clearContents()
+        self.appointments_table.setRowCount(len(appointments))
 
-        def fixed(value: str, width: int) -> str:
-            text = str(value or "-").strip()
-            if len(text) > width:
-                return f"{text[: width - 1]}…"
-            return f"{text:<{width}}"
-
-        if not appointments:
-            self.appointments_list.addItem("No appointments found for this patient.")
-            return
-
-        for appointment in appointments:
-            item_text = (
-                f"{str(appointment.get('id', '-'))}  "
-                f"{fixed(appointment.get('appointment_date', '-'), 22)} "
-                f"{fixed(str(appointment.get('duration_minutes', '-')), 8)} "
-                f"{fixed(appointment.get('reason', '-'), 24)} "
-                f"{fixed(appointment.get('location', '-'), 16)}"
-            )
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.ItemDataRole.UserRole, appointment)
-            self.appointments_list.addItem(item)
+        for row_index, appointment in enumerate(appointments):
+            id_item = QTableWidgetItem(str(appointment.get("id", "-")))
+            id_item.setData(Qt.ItemDataRole.UserRole, appointment)
+            self.appointments_table.setItem(row_index, 0, id_item)
+            self.appointments_table.setItem(row_index, 1, QTableWidgetItem(str(appointment.get("appointment_date") or "-")))
+            self.appointments_table.setItem(row_index, 2, QTableWidgetItem(str(appointment.get("duration_minutes") or "-")))
+            self.appointments_table.setItem(row_index, 3, QTableWidgetItem(str(appointment.get("reason") or "-")))
+            self.appointments_table.setItem(row_index, 4, QTableWidgetItem(str(appointment.get("location") or "-")))
 
     def _selected_appointment(self) -> Optional[dict]:
-        current = self.appointments_list.currentItem()
-        if not current:
+        row = self.appointments_table.currentRow()
+        if row < 0:
             QMessageBox.warning(self, "Warning", "Please select an appointment first.")
             return None
-        data = current.data(Qt.ItemDataRole.UserRole)
+        item = self.appointments_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, "Warning", "Selected row does not contain an appointment.")
+            return None
+        data = item.data(Qt.ItemDataRole.UserRole)
         if not isinstance(data, dict):
             QMessageBox.warning(self, "Warning", "Selected row does not contain an appointment.")
             return None
         return data
 
     def _open_context_menu(self, pos) -> None:
-        item = self.appointments_list.itemAt(pos)
-        if item is None:
+        row = self.appointments_table.indexAt(pos).row()
+        if row < 0:
             return
-        self.appointments_list.setCurrentItem(item)
+        self.appointments_table.setCurrentCell(row, 0)
 
         menu = QMenu(self)
         delete_action = menu.addAction("Delete")
-        selected_action = menu.exec_(self.appointments_list.mapToGlobal(pos))
+        selected_action = menu.exec_(self.appointments_table.viewport().mapToGlobal(pos))
         if selected_action == delete_action:
             self.delete_selected_appointment()
 
@@ -660,14 +660,22 @@ class LabRecordsWindow(QDialog):
             f"{patient.get('first_name', '-')} {patient.get('last_name', '-')}"
         )
         layout.addWidget(header)
-        layout.addWidget(_create_list_header("ID    Test Type      Test Name            Test Date              Result"))
-
-        self.records_list = QListWidget()
-        self.records_list.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        self.records_list.itemDoubleClicked.connect(lambda _item: self.open_update_dialog())
-        self.records_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.records_list.customContextMenuRequested.connect(self._open_context_menu)
-        layout.addWidget(self.records_list)
+        self.records_table = QTableWidget(0, 5)
+        self.records_table.setHorizontalHeaderLabels(["ID", "Test Type", "Test Name", "Test Date", "Result"])
+        self.records_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.records_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.records_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.records_table.verticalHeader().setVisible(False)
+        self.records_table.cellDoubleClicked.connect(lambda _row, _col: self.open_update_dialog())
+        self.records_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.records_table.customContextMenuRequested.connect(self._open_context_menu)
+        header_widget = self.records_table.horizontalHeader()
+        header_widget.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(2, QHeaderView.Stretch)
+        header_widget.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        layout.addWidget(self.records_table)
 
         top_controls = QHBoxLayout()
         top_controls.addStretch()
@@ -708,50 +716,42 @@ class LabRecordsWindow(QDialog):
             QMessageBox.critical(self, "Error", f"Failed to load lab records: {str(exc)}")
 
     def _render_records(self, records: List[dict]) -> None:
-        self.records_list.clear()
+        self.records_table.clearContents()
+        self.records_table.setRowCount(len(records))
 
-        def fixed(value: str, width: int) -> str:
-            text = str(value or "-").strip()
-            if len(text) > width:
-                return f"{text[: width - 1]}…"
-            return f"{text:<{width}}"
-
-        if not records:
-            self.records_list.addItem("No lab records found for this patient.")
-            return
-
-        for record in records:
-            item_text = (
-                f"{str(record.get('id', '-'))}  "
-                f"{fixed(record.get('test_type', '-'), 14)} "
-                f"{fixed(record.get('test_name', '-'), 20)} "
-                f"{fixed(record.get('test_date', '-'), 22)} "
-                f"{fixed(record.get('result', '-'), 18)}"
-            )
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.ItemDataRole.UserRole, record)
-            self.records_list.addItem(item)
+        for row_index, record in enumerate(records):
+            id_item = QTableWidgetItem(str(record.get("id", "-")))
+            id_item.setData(Qt.ItemDataRole.UserRole, record)
+            self.records_table.setItem(row_index, 0, id_item)
+            self.records_table.setItem(row_index, 1, QTableWidgetItem(str(record.get("test_type") or "-")))
+            self.records_table.setItem(row_index, 2, QTableWidgetItem(str(record.get("test_name") or "-")))
+            self.records_table.setItem(row_index, 3, QTableWidgetItem(str(record.get("test_date") or "-")))
+            self.records_table.setItem(row_index, 4, QTableWidgetItem(str(record.get("result") or "-")))
 
     def _selected_record(self) -> Optional[dict]:
-        current = self.records_list.currentItem()
-        if not current:
+        row = self.records_table.currentRow()
+        if row < 0:
             QMessageBox.warning(self, "Warning", "Please select a lab record first.")
             return None
-        record = current.data(Qt.ItemDataRole.UserRole)
+        item = self.records_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, "Warning", "Selected row does not contain a lab record.")
+            return None
+        record = item.data(Qt.ItemDataRole.UserRole)
         if not isinstance(record, dict):
             QMessageBox.warning(self, "Warning", "Selected row does not contain a lab record.")
             return None
         return record
 
     def _open_context_menu(self, pos) -> None:
-        item = self.records_list.itemAt(pos)
-        if item is None:
+        row = self.records_table.indexAt(pos).row()
+        if row < 0:
             return
-        self.records_list.setCurrentItem(item)
+        self.records_table.setCurrentCell(row, 0)
 
         menu = QMenu(self)
         delete_action = menu.addAction("Delete")
-        selected_action = menu.exec_(self.records_list.mapToGlobal(pos))
+        selected_action = menu.exec_(self.records_table.viewport().mapToGlobal(pos))
         if selected_action == delete_action:
             self.delete_selected_record()
 
@@ -947,14 +947,21 @@ class MedicalInformationWindow(QDialog):
             f"{patient.get('first_name', '-')} {patient.get('last_name', '-')}"
         )
         layout.addWidget(header)
-        layout.addWidget(_create_list_header("ID    Primary Condition       Allergies              Last Updated"))
-
-        self.records_list = QListWidget()
-        self.records_list.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        self.records_list.itemDoubleClicked.connect(lambda _item: self.open_update_dialog())
-        self.records_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.records_list.customContextMenuRequested.connect(self._open_context_menu)
-        layout.addWidget(self.records_list)
+        self.records_table = QTableWidget(0, 4)
+        self.records_table.setHorizontalHeaderLabels(["ID", "Primary Condition", "Allergies", "Last Updated"])
+        self.records_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.records_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.records_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.records_table.verticalHeader().setVisible(False)
+        self.records_table.cellDoubleClicked.connect(lambda _row, _col: self.open_update_dialog())
+        self.records_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.records_table.customContextMenuRequested.connect(self._open_context_menu)
+        header_widget = self.records_table.horizontalHeader()
+        header_widget.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(1, QHeaderView.Stretch)
+        header_widget.setSectionResizeMode(2, QHeaderView.Stretch)
+        header_widget.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        layout.addWidget(self.records_table)
 
         top_controls = QHBoxLayout()
         top_controls.addStretch()
@@ -995,49 +1002,41 @@ class MedicalInformationWindow(QDialog):
             QMessageBox.critical(self, "Error", f"Failed to load medical information: {str(exc)}")
 
     def _render_records(self, records: List[dict]) -> None:
-        self.records_list.clear()
+        self.records_table.clearContents()
+        self.records_table.setRowCount(len(records))
 
-        def fixed(value: str, width: int) -> str:
-            text = str(value or "-").strip()
-            if len(text) > width:
-                return f"{text[: width - 1]}…"
-            return f"{text:<{width}}"
-
-        if not records:
-            self.records_list.addItem("No medical information records found for this patient.")
-            return
-
-        for record in records:
-            item_text = (
-                f"{str(record.get('id', '-'))}  "
-                f"{fixed(record.get('primary_condition', '-'), 22)} "
-                f"{fixed(record.get('allergies', '-'), 22)} "
-                f"{fixed(record.get('last_updated', '-'), 22)}"
-            )
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.ItemDataRole.UserRole, record)
-            self.records_list.addItem(item)
+        for row_index, record in enumerate(records):
+            id_item = QTableWidgetItem(str(record.get("id", "-")))
+            id_item.setData(Qt.ItemDataRole.UserRole, record)
+            self.records_table.setItem(row_index, 0, id_item)
+            self.records_table.setItem(row_index, 1, QTableWidgetItem(str(record.get("primary_condition") or "-")))
+            self.records_table.setItem(row_index, 2, QTableWidgetItem(str(record.get("allergies") or "-")))
+            self.records_table.setItem(row_index, 3, QTableWidgetItem(str(record.get("last_updated") or "-")))
 
     def _selected_record(self) -> Optional[dict]:
-        current = self.records_list.currentItem()
-        if not current:
+        row = self.records_table.currentRow()
+        if row < 0:
             QMessageBox.warning(self, "Warning", "Please select a medical information record first.")
             return None
-        record = current.data(Qt.ItemDataRole.UserRole)
+        item = self.records_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, "Warning", "Selected row does not contain a medical information record.")
+            return None
+        record = item.data(Qt.ItemDataRole.UserRole)
         if not isinstance(record, dict):
             QMessageBox.warning(self, "Warning", "Selected row does not contain a medical information record.")
             return None
         return record
 
     def _open_context_menu(self, pos) -> None:
-        item = self.records_list.itemAt(pos)
-        if item is None:
+        row = self.records_table.indexAt(pos).row()
+        if row < 0:
             return
-        self.records_list.setCurrentItem(item)
+        self.records_table.setCurrentCell(row, 0)
 
         menu = QMenu(self)
         delete_action = menu.addAction("Delete")
-        selected_action = menu.exec_(self.records_list.mapToGlobal(pos))
+        selected_action = menu.exec_(self.records_table.viewport().mapToGlobal(pos))
         if selected_action == delete_action:
             self.delete_selected_record()
 
@@ -1252,14 +1251,22 @@ class MedicationsWindow(QDialog):
             f"{patient.get('first_name', '-')} {patient.get('last_name', '-')}"
         )
         layout.addWidget(header)
-        layout.addWidget(_create_list_header("ID    Dosage             Frequency          Start Date   End Date"))
-
-        self.records_list = QListWidget()
-        self.records_list.setFont(QFontDatabase.systemFont(QFontDatabase.FixedFont))
-        self.records_list.itemDoubleClicked.connect(lambda _item: self.open_update_dialog())
-        self.records_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.records_list.customContextMenuRequested.connect(self._open_context_menu)
-        layout.addWidget(self.records_list)
+        self.records_table = QTableWidget(0, 5)
+        self.records_table.setHorizontalHeaderLabels(["ID", "Dosage", "Frequency", "Start Date", "End Date"])
+        self.records_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.records_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.records_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.records_table.verticalHeader().setVisible(False)
+        self.records_table.cellDoubleClicked.connect(lambda _row, _col: self.open_update_dialog())
+        self.records_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.records_table.customContextMenuRequested.connect(self._open_context_menu)
+        header_widget = self.records_table.horizontalHeader()
+        header_widget.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(1, QHeaderView.Stretch)
+        header_widget.setSectionResizeMode(2, QHeaderView.Stretch)
+        header_widget.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header_widget.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        layout.addWidget(self.records_table)
 
         top_controls = QHBoxLayout()
         top_controls.addStretch()
@@ -1300,50 +1307,42 @@ class MedicationsWindow(QDialog):
             QMessageBox.critical(self, "Error", f"Failed to load medications: {str(exc)}")
 
     def _render_records(self, records: List[dict]) -> None:
-        self.records_list.clear()
+        self.records_table.clearContents()
+        self.records_table.setRowCount(len(records))
 
-        def fixed(value: str, width: int) -> str:
-            text = str(value or "-").strip()
-            if len(text) > width:
-                return f"{text[: width - 1]}…"
-            return f"{text:<{width}}"
-
-        if not records:
-            self.records_list.addItem("No medications found for this patient.")
-            return
-
-        for record in records:
-            item_text = (
-                f"{str(record.get('id', '-'))}  "
-                f"{fixed(record.get('dosage', '-'), 18)} "
-                f"{fixed(record.get('frequency', '-'), 18)} "
-                f"{fixed(record.get('start_date', '-'), 12)} "
-                f"{fixed(record.get('end_date', '-'), 12)}"
-            )
-            item = QListWidgetItem(item_text)
-            item.setData(Qt.ItemDataRole.UserRole, record)
-            self.records_list.addItem(item)
+        for row_index, record in enumerate(records):
+            id_item = QTableWidgetItem(str(record.get("id", "-")))
+            id_item.setData(Qt.ItemDataRole.UserRole, record)
+            self.records_table.setItem(row_index, 0, id_item)
+            self.records_table.setItem(row_index, 1, QTableWidgetItem(str(record.get("dosage") or "-")))
+            self.records_table.setItem(row_index, 2, QTableWidgetItem(str(record.get("frequency") or "-")))
+            self.records_table.setItem(row_index, 3, QTableWidgetItem(str(record.get("start_date") or "-")))
+            self.records_table.setItem(row_index, 4, QTableWidgetItem(str(record.get("end_date") or "-")))
 
     def _selected_record(self) -> Optional[dict]:
-        current = self.records_list.currentItem()
-        if not current:
+        row = self.records_table.currentRow()
+        if row < 0:
             QMessageBox.warning(self, "Warning", "Please select a medication first.")
             return None
-        record = current.data(Qt.ItemDataRole.UserRole)
+        item = self.records_table.item(row, 0)
+        if item is None:
+            QMessageBox.warning(self, "Warning", "Selected row does not contain a medication.")
+            return None
+        record = item.data(Qt.ItemDataRole.UserRole)
         if not isinstance(record, dict):
             QMessageBox.warning(self, "Warning", "Selected row does not contain a medication.")
             return None
         return record
 
     def _open_context_menu(self, pos) -> None:
-        item = self.records_list.itemAt(pos)
-        if item is None:
+        row = self.records_table.indexAt(pos).row()
+        if row < 0:
             return
-        self.records_list.setCurrentItem(item)
+        self.records_table.setCurrentCell(row, 0)
 
         menu = QMenu(self)
         delete_action = menu.addAction("Delete")
-        selected_action = menu.exec_(self.records_list.mapToGlobal(pos))
+        selected_action = menu.exec_(self.records_table.viewport().mapToGlobal(pos))
         if selected_action == delete_action:
             self.delete_selected_record()
 
