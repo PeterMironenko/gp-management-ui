@@ -21,6 +21,7 @@ _UI_DIR = os.path.abspath(os.path.join(_TESTS_DIR, ".."))
 if _UI_DIR not in sys.path:
     sys.path.insert(0, _UI_DIR)
 
+import patientwindow as _pw_mod
 import staffdashboardwindow as _sdbw_mod
 
 _VALID_PATIENT = {
@@ -234,62 +235,56 @@ class TestStaffAppointmentsDelete:
         assert db_row is None, "Deleted appointment must not exist in the database"
 
 
-def test_staff_ui_patient_tab_details(qtbot, staff_window, db_conn):
-    """
-    Test the Staff UI Patient tab to ensure that right-clicking a patient record
-    displays the correct details and allows access to the following tabs:
-    - Edits
-    - Appointments
-    - Lab Records
-    - Medical Information
-    - Medication
-    """
-    # Access the "Patients" tab from the QTabWidget
-    tabs = staff_window.centralWidget()
-    patient_window = tabs.widget(1)  # Assuming "Patients" tab is the second tab
-
-    # Call the refresh_patients method
+def test_staff_ui_patient_tab_details(staff_window, staff_patient, monkeypatch):
+    """The staff patient tab should open each supported detail window for the selected patient."""
+    patient_window = staff_window.patient_window
     patient_window.refresh_patients()
 
-    # Select a patient record by right-clicking on the first row
-    patient_table = patient_window.centralWidget().findChild(QTableWidget, "patient_table")
-    qtbot.mouseClick(patient_table.viewport(), Qt.RightButton, pos=patient_table.visualRect(patient_table.model().index(0, 0)).center())
+    patient_table = patient_window.patient_table
+    selected_row = -1
+    for row in range(patient_table.rowCount()):
+        item = patient_table.item(row, 0)
+        if item is None:
+            continue
+        patient = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(patient, dict) and patient.get("id") == staff_patient["id"]:
+            selected_row = row
+            break
 
-    # Verify that the context menu appears
-    context_menu = patient_window.findChild(QMenu, "context_menu")
-    assert context_menu.isVisible(), "Context menu did not appear after right-clicking a patient record."
+    assert selected_row >= 0, "Assigned patient must be visible in the patient table"
+    patient_table.selectRow(selected_row)
 
-    # Check that all required tabs are accessible
-    required_tabs = ["Edits", "Appointments", "Lab Records", "Medical Information", "Medication"]
-    for tab_name in required_tabs:
-        assert context_menu.findAction(tab_name) is not None, f"'{tab_name}' tab is missing in the context menu."
+    opened = []
 
-    # Simulate clicking each tab and verify the corresponding dialog opens
-    for tab_name in required_tabs:
-        action = context_menu.findAction(tab_name)
-        qtbot.mouseClick(action, Qt.LeftButton)
+    def _window_stub(expected_title):
+        class _Stub:
+            def __init__(self, api_client, patient, parent=None):
+                opened.append(
+                    {
+                        "title": expected_title,
+                        "patient_id": patient.get("id"),
+                        "parent": parent,
+                    }
+                )
 
-        # Verify the dialog for the tab is displayed
-        dialog = patient_window.findChild(QDialog, "open_dialog")
-        assert dialog is not None, f"Dialog for '{tab_name}' did not open."
-        assert dialog.windowTitle() == tab_name, f"Dialog title for '{tab_name}' is incorrect."
+            def exec_(self):
+                return QDialog.Accepted
 
-        # Close the dialog after verification
-        dialog.close()
+        return _Stub
 
-    # Verify that no unexpected dialogs remain open
-    assert not patient_window.findChild(QDialog, "open_dialog"), "Some dialogs remained open after testing all tabs."
+    monkeypatch.setattr(_pw_mod, "AppointmentsWindow", _window_stub("Appointments"))
+    monkeypatch.setattr(_pw_mod, "LabRecordsWindow", _window_stub("Lab Records"))
+    monkeypatch.setattr(_pw_mod, "MedicalInformationWindow", _window_stub("Medical Information"))
+    monkeypatch.setattr(_pw_mod, "MedicationsWindow", _window_stub("Medications"))
 
-    # Verify database consistency for the patient record
-    patient_id = patient_table.model().index(0, 0).data()
-    patient_record = db_conn.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
-    assert patient_record is not None, "Patient record does not exist in the database."
+    patient_window.open_appointments_window()
+    patient_window.open_labrecords_window()
+    patient_window.open_medicalinformation_window()
+    patient_window.open_medications_window()
 
-    # Verify related data exists in the database
-    related_tables = ["appointments", "lab_records", "medical_information", "medications"]
-    for table in related_tables:
-        related_data = db_conn.execute(f"SELECT * FROM {table} WHERE patient_id = ?", (patient_id,)).fetchall()
-        assert len(related_data) > 0, f"No related data found in '{table}' for patient ID {patient_id}."
-
-    # Cleanup: Ensure no lingering state
-    patient_window.findChild(QDialog, "open_dialog").close()
+    assert opened == [
+        {"title": "Appointments", "patient_id": staff_patient["id"], "parent": patient_window},
+        {"title": "Lab Records", "patient_id": staff_patient["id"], "parent": patient_window},
+        {"title": "Medical Information", "patient_id": staff_patient["id"], "parent": patient_window},
+        {"title": "Medications", "patient_id": staff_patient["id"], "parent": patient_window},
+    ]

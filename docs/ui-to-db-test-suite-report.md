@@ -46,6 +46,7 @@ The suite currently includes the following files:
 5. `tests/test_ui_staff_appointments.py`
 - Staff patient visibility in appointments tab
 - Appointment create and delete flows
+- Staff patient tab detail-window access flow
 - Database verification for appointment lifecycle
 
 ## Detailed Test Steps
@@ -323,6 +324,23 @@ Shared fixture `staff_patient` setup steps:
 - Query DB by appointment id.
 - Assert row is deleted.
 
+5. `test_staff_ui_patient_tab_details`
+- Access the real `PatientWindow` instance via `staff_window.patient_window`.
+- Refresh the patient table for the logged-in staff member.
+- Find the fixture patient row in `patient_table` by matching selected patient id from the row `UserRole` payload.
+- Select the patient row.
+- Monkeypatch the supported patient detail windows:
+	- `AppointmentsWindow`
+	- `LabRecordsWindow`
+	- `MedicalInformationWindow`
+	- `MedicationsWindow`
+- Call each public patient detail opener:
+	- `open_appointments_window()`
+	- `open_labrecords_window()`
+	- `open_medicalinformation_window()`
+	- `open_medications_window()`
+- Assert each detail window was invoked with the selected patient and `PatientWindow` as parent.
+
 ## How To Run
 From `gp-management-ui`:
 
@@ -365,19 +383,19 @@ tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_valid_drug
 Execution date: 2026-03-22
 
 Summary:
-- Collected: 32 tests
-- Passed: 32
+- Collected: 33 tests
+- Passed: 33
 - Failed: 0
 - Errors: 0
 - Warnings: 1
-- Duration: 2.61s
+- Duration: 2.63s
 
 Module-level result:
 - `tests/test_ui_admin_patients_drugs.py` -> 10 passed
 - `tests/test_ui_admin_users.py` -> 8 passed
 - `tests/test_ui_approval_flow.py` -> 4 passed
 - `tests/test_ui_login.py` -> 6 passed
-- `tests/test_ui_staff_appointments.py` -> 4 passed
+- `tests/test_ui_staff_appointments.py` -> 5 passed
 
 Warning details:
 - `DeprecationWarning` from `passlib` using `crypt` (Python 3.13 deprecation notice)
