@@ -1,5 +1,37 @@
 # GP Management System Design Document
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Aims and Objectives](#aims-and-objectives)
+- [Scope and Limitations](#scope-and-limitations)
+	- [In Scope](#in-scope)
+	- [Current Limitations](#current-limitations)
+- [System Architecture](#system-architecture)
+	- [High-Level Architecture](#high-level-architecture)
+	- [Backend Architecture (`gp-management`)](#backend-architecture-gp-management)
+	- [Frontend Architecture (`gp-management-ui`)](#frontend-architecture-gp-management-ui)
+- [Database Design](#database-design)
+	- [Main Entities](#main-entities)
+	- [Relationship Overview](#relationship-overview)
+	- [Notable Data Rules](#notable-data-rules)
+- [API Design](#api-design)
+	- [API Style and Conventions](#api-style-and-conventions)
+	- [Endpoint Groups](#endpoint-groups)
+	- [Filtering Patterns](#filtering-patterns)
+	- [Request and Response Characteristics](#request-and-response-characteristics)
+- [User Interface Design](#user-interface-design)
+	- [Login and Session UX](#login-and-session-ux)
+	- [Admin Interface (`AdminWindow`)](#admin-interface-adminwindow)
+	- [Staff Interface (`StaffDashboardWindow`)](#staff-interface-staffdashboardwindow)
+	- [Input Validation and UX Behavior](#input-validation-and-ux-behavior)
+- [End-to-End Functional Flows](#end-to-end-functional-flows)
+	- [Flow A: Admin Creates a New User](#flow-a-admin-creates-a-new-user)
+	- [Flow B: Staff Manages Appointments](#flow-b-staff-manages-appointments)
+	- [Flow C: Medication Approval Pipeline](#flow-c-medication-approval-pipeline)
+- [Deployment and Runtime Considerations](#deployment-and-runtime-considerations)
+- [Future Improvements](#future-improvements)
+
 ## Overview
 
 The GP Management system is composed of two Python applications:
@@ -244,7 +276,7 @@ Primary tabs include:
 3. Consistent modal dialogs for create/update/delete confirmations.
 4. Table-driven interaction patterns with context menus and double-click edit.
 
-## End-to-End Functional Flows
+## Some examples of End-to-End Functional Flows
 
 ### Flow A: Admin Creates a New User
 
@@ -274,15 +306,10 @@ Primary tabs include:
 1. Backend can run directly with startup scripts or via Docker Compose.
 2. Frontend can target local backend or hosted backend by changing URL at login.
 3. Cross-platform developer execution is supported on Windows, Linux, and macOS.
-4. Recommended production enhancements:
-	1. Persistent JWT secret management.
-	2. Stronger endpoint-level authorization consistency.
-	3. Migration path from SQLite to managed RDBMS.
 
 ## Future Improvements
 
-1. Introduce service layer to isolate domain business logic from resource handlers.
-2. Expand role/permission model beyond binary admin/staff.
-3. Add optimistic concurrency and audit trails on sensitive operations.
-4. Add API pagination/sorting conventions for large datasets.
-5. Add integration tests covering full UI-to-API critical workflows.
+1. Improve scalability and performance of the backend services by using SQL database like PostgreSQL and implementing caching strategies.
+2. Enhance security by implementing role-based access control (RBAC) and improving JWT management.
+3. Add secure HTTPS connection between frontend and backend.
+4. Implement background job processing for long-running tasks (e.g., medication approval notifications).
