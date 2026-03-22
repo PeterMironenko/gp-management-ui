@@ -43,10 +43,15 @@ The suite currently includes the following files:
 - Approve action updates DB state
 - Approved record disappears from pending approvals table
 
-5. `tests/test_ui_staff_appointments.py`
+5. `tests/test_ui_staff_dashboard.py`
 - Staff patient visibility in appointments tab
 - Appointment create and delete flows
 - Staff patient tab detail-window access flow
+- Staff patient tab right-click action flow (open detail windows + delete)
+- Appointments window UI create/update/delete workflow to DB
+- Lab Records window UI create/update/delete workflow to DB
+- Medical Information window UI create/update/delete workflow to DB
+- Medications window UI create/update/delete workflow to DB
 - Database verification for appointment lifecycle
 
 ## Detailed Test Steps
@@ -282,7 +287,7 @@ Shared fixture `approval_seed` setup steps:
 - Refresh and recount pending rows.
 - Assert pending count decreased.
 
-### tests/test_ui_staff_appointments.py
+### tests/test_ui_staff_dashboard.py
 
 Shared fixture `staff_patient` setup steps:
 - Read staff user staff id from `/me`.
@@ -341,29 +346,83 @@ Shared fixture `staff_patient` setup steps:
 	- `open_medications_window()`
 - Assert each detail window was invoked with the selected patient and `PatientWindow` as parent.
 
+6. `test_staff_ui_patient_tab_right_click_actions`
+- Access `staff_window.patient_window` and refresh patients.
+- Locate and select the fixture patient row in `patient_table`.
+- Monkeypatch `AppointmentsWindow`, `LabRecordsWindow`, `MedicalInformationWindow`, and `MedicationsWindow` with recording stubs.
+- Monkeypatch `QMenu.exec_` to simulate selecting each context-menu action in sequence:
+	- `Appointments`
+	- `Lab Records`
+	- `Medical Information`
+	- `Medications`
+	- `Delete`
+- Call `PatientWindow._open_context_menu(...)` for each simulated action.
+- Assert all four detail-window actions were invoked with the selected patient.
+- Assert delete action removed the patient from DB.
+
+7. `test_appointments_window_ui_to_db_workflow`
+- Open `AppointmentsWindow` for the selected staff patient.
+- Monkeypatch `AppointmentDialog` create payload and trigger `open_create_dialog()`.
+- Assert created appointment row exists in `appointments` table.
+- Select created row in `appointments_table`.
+- Monkeypatch `AppointmentDialog` update payload and trigger `open_update_dialog()`.
+- Assert updated values persisted in DB.
+- Trigger `delete_selected_appointment()`.
+- Assert appointment row is removed from DB.
+
+8. `test_lab_records_window_ui_to_db_workflow`
+- Open `LabRecordsWindow` for the selected staff patient.
+- Monkeypatch `LabRecordDialog` create payload and trigger `open_create_dialog()`.
+- Assert created lab record row exists in `lab_records` table.
+- Select created row in `records_table`.
+- Monkeypatch `LabRecordDialog` update payload and trigger `open_update_dialog()`.
+- Assert updated values persisted in DB.
+- Trigger `delete_selected_record()`.
+- Assert lab record row is removed from DB.
+
+9. `test_medical_information_window_ui_to_db_workflow`
+- Open `MedicalInformationWindow` for the selected staff patient.
+- Monkeypatch `MedicalInformationDialog` create payload and trigger `open_create_dialog()`.
+- Assert created medical information row exists in `medical_information` table.
+- Select created row in `records_table`.
+- Monkeypatch `MedicalInformationDialog` update payload and trigger `open_update_dialog()`.
+- Assert updated values persisted in DB.
+- Trigger `delete_selected_record()`.
+- Assert medical information row is removed from DB.
+
+10. `test_medications_window_ui_to_db_workflow`
+- Open `MedicationsWindow` for the selected staff patient.
+- Monkeypatch `MedicationDialog` create payload and trigger `open_create_dialog()`.
+- Assert created medication row exists in `medications` table.
+- Select created row in `records_table`.
+- Monkeypatch `MedicationDialog` update payload and trigger `open_update_dialog()`.
+- Assert updated values persisted in DB.
+- Trigger `delete_selected_record()`.
+- Assert medication row is removed from DB.
+
 ## How To Run
 From `gp-management-ui`:
 
 **On Linux and MacOS**
 ```bash
-pip install -r requirements-test.txt
+.venv/bin/python3 -m pip install -r requirements-test.txt
 QT_QPA_PLATFORM=offscreen .venv/bin/python3 -m pytest -q
 ```
 
 **On Windows**
 ```PowerShell
 pip install -r requirements-test.txt
-set QT_QPA_PLATFORM=offscreen
-.\.venv\Scripts\py.test.exe -m pytest -q
+$env:QT_QPA_PLATFORM = "offscreen"
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-If you want to have report for each induvidual test, run command with additional *-v* option, like this:
+For per-test output, add `-v`:
 
-```PowerShell
-.\.venv\Scripts\py.test.exe -m pytest -q -v
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/python3 -m pytest -q -v
 ```
 
-You should see the output as below:
+Example output:
 
 ```PowerShell
 tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_appears_in_db PASSED                                                                                                                                                                                                                                                                                [  3%]
@@ -382,20 +441,26 @@ tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_valid_drug
 ## Latest Test Results
 Execution date: 2026-03-22
 
+Command:
+
+```bash
+QT_QPA_PLATFORM=offscreen .venv/bin/python3 -m pytest -q
+```
+
 Summary:
-- Collected: 33 tests
-- Passed: 33
+- Collected: 38 tests
+- Passed: 38
 - Failed: 0
 - Errors: 0
 - Warnings: 1
-- Duration: 2.63s
+- Duration: 2.97s
 
 Module-level result:
 - `tests/test_ui_admin_patients_drugs.py` -> 10 passed
 - `tests/test_ui_admin_users.py` -> 8 passed
 - `tests/test_ui_approval_flow.py` -> 4 passed
 - `tests/test_ui_login.py` -> 6 passed
-- `tests/test_ui_staff_appointments.py` -> 5 passed
+- `tests/test_ui_staff_dashboard.py` -> 10 passed
 
 Warning details:
 - `DeprecationWarning` from `passlib` using `crypt` (Python 3.13 deprecation notice)
