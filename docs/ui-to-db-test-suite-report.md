@@ -1,3 +1,25 @@
+# Table of Contents
+
+- [Purpose](#purpose)
+- [Test Suite Architecture](#test-suite-architecture)
+- [Coverage Overview](#coverage-overview)
+  - [tests/test_ui_login.py](#teststestuiloginpy)
+  - [tests/test_ui_admin_users.py](#teststestuadminuserspy)
+  - [tests/test_ui_admin_patients_drugs.py](#teststestuadminpatientsdrugspy)
+  - [tests/test_ui_approval_flow.py](#teststestuapprovalflowpy)
+  - [tests/test_ui_staff_appointments.py](#teststestuistaffappointmentspy)
+- [Detailed Test Steps](#detailed-test-steps)
+  - [tests/test_ui_login.py](#teststestuiloginpy-1)
+  - [tests/test_ui_admin_users.py](#teststestuadminuserspy-1)
+  - [tests/test_ui_admin_patients_drugs.py](#teststestuadminpatientsdrugspy-1)
+  - [tests/test_ui_approval_flow.py](#teststestuapprovalflowpy-1)
+  - [tests/test_ui_staff_appointments.py](#teststestuistaffappointmentspy-1)
+- [How To Run](#how-to-run)
+- [Latest Test Results](#latest-test-results)
+- [Notes](#notes)
+
+---
+
 # UI to Database Test Suite Report
 
 ## Purpose
@@ -422,22 +444,6 @@ For per-test output, add `-v`:
 QT_QPA_PLATFORM=offscreen .venv/bin/python3 -m pytest -q -v
 ```
 
-Example output:
-
-```PowerShell
-tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_appears_in_db PASSED                                                                                                                                                                                                                                                                                [  3%]
-tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_visible_in_table PASSED                                                                                                                                                                                                                                                                             [  6%]
-tests/test_ui_admin_patients_drugs.py::TestUpdatePatient::test_update_patient_persists_to_db PASSED                                                                                                                                                                                                                                                                               [  9%]
-tests/test_ui_admin_patients_drugs.py::TestDeletePatient::test_delete_patient_removes_from_db PASSED                                                                                                                                                                                                                                                                              [ 12%]
-tests/test_ui_admin_patients_drugs.py::TestCreateDrug::test_create_drug_appears_in_db PASSED                                                                                                                                                                                                                                                                                      [ 15%]
-tests/test_ui_admin_patients_drugs.py::TestCreateDrug::test_create_drug_visible_in_table PASSED                                                                                                                                                                                                                                                                                   [ 18%]
-tests/test_ui_admin_patients_drugs.py::TestUpdateDrug::test_update_drug_persists_to_db PASSED                                                                                                                                                                                                                                                                                     [ 21%]
-tests/test_ui_admin_patients_drugs.py::TestDeleteDrug::test_delete_drug_removes_from_db PASSED                                                                                                                                                                                                                                                                                    [ 25%]
-tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_empty_drug_name_gives_no_payload PASSED                                                                                                                                                                                                                                                                     [ 28%] 
-tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_valid_drug_name_produces_payload PASSED  
-```
-
-
 ## Latest Test Results
 Execution date: 2026-03-22
 
@@ -455,15 +461,48 @@ Summary:
 - Warnings: 1
 - Duration: 2.97s
 
-Module-level result:
-- `tests/test_ui_admin_patients_drugs.py` -> 10 passed
-- `tests/test_ui_admin_users.py` -> 8 passed
-- `tests/test_ui_approval_flow.py` -> 4 passed
-- `tests/test_ui_login.py` -> 6 passed
-- `tests/test_ui_staff_dashboard.py` -> 10 passed
+Individual test results:
 
-Warning details:
-- `DeprecationWarning` from `passlib` using `crypt` (Python 3.13 deprecation notice)
+| Test | Result |
+| --- | --- |
+| tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_appears_in_db | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_visible_in_table | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestUpdatePatient::test_update_patient_persists_to_db | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestDeletePatient::test_delete_patient_removes_from_db | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestCreateDrug::test_create_drug_appears_in_db | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestCreateDrug::test_create_drug_visible_in_table | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestUpdateDrug::test_update_drug_persists_to_db | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestDeleteDrug::test_delete_drug_removes_from_db | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_empty_drug_name_gives_no_payload | PASSED |
+| tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_valid_drug_name_produces_payload | PASSED |
+| tests/test_ui_admin_users.py::TestCreateUser::test_create_user_appears_in_db | PASSED |
+| tests/test_ui_admin_users.py::TestCreateUser::test_created_user_visible_in_table | PASSED |
+| tests/test_ui_admin_users.py::TestUpdateUser::test_update_username_persists_to_db | PASSED |
+| tests/test_ui_admin_users.py::TestDeleteUser::test_delete_user_removes_from_db | PASSED |
+| tests/test_ui_admin_users.py::TestDeleteUser::test_delete_user_removed_from_table | PASSED |
+| tests/test_ui_admin_users.py::TestDialogValidation::test_create_dialog_empty_username_gives_no_payload | PASSED |
+| tests/test_ui_admin_users.py::TestDialogValidation::test_create_dialog_password_mismatch_gives_no_payload | PASSED |
+| tests/test_ui_admin_users.py::TestDialogValidation::test_create_dialog_valid_input_produces_payload | PASSED |
+| tests/test_ui_approval_flow.py::TestApprovalFlow::test_unapproved_medication_shown_in_table | PASSED |
+| tests/test_ui_approval_flow.py::TestApprovalFlow::test_approve_medication_updates_db | PASSED |
+| tests/test_ui_approval_flow.py::TestApprovalFlow::test_approved_medication_removed_from_table | PASSED |
+| tests/test_ui_approval_flow.py::TestApprovalFlow::test_approved_medication_approval_count_decreases | PASSED |
+| tests/test_ui_login.py::TestLoginDialog::test_admin_login_sets_is_admin_true | PASSED |
+| tests/test_ui_login.py::TestLoginDialog::test_staff_login_sets_is_admin_false | PASSED |
+| tests/test_ui_login.py::TestLoginDialog::test_empty_credentials_shows_warning_no_token | PASSED |
+| tests/test_ui_login.py::TestLoginDialog::test_wrong_password_shows_error_no_token | PASSED |
+| tests/test_ui_login.py::TestLoginDialog::test_admin_login_routes_to_admin_window | PASSED |
+| tests/test_ui_login.py::TestLoginDialog::test_staff_login_routes_to_staff_window | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffAppointmentsCreate::test_patient_visible_after_refresh | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffAppointmentsCreate::test_create_appointment_persists_to_db | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffAppointmentsCreate::test_create_appointment_visible_in_table | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffAppointmentsDelete::test_delete_appointment_removes_from_db | PASSED |
+| tests/test_ui_staff_dashboard.py::test_staff_ui_patient_tab_details | PASSED |
+| tests/test_ui_staff_dashboard.py::test_staff_ui_patient_tab_right_click_actions | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffPatientDetailWindowsWorkflow::test_appointments_window_ui_to_db_workflow | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffPatientDetailWindowsWorkflow::test_lab_records_window_ui_to_db_workflow | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffPatientDetailWindowsWorkflow::test_medical_information_window_ui_to_db_workflow | PASSED |
+| tests/test_ui_staff_dashboard.py::TestStaffPatientDetailWindowsWorkflow::test_medications_window_ui_to_db_workflow | PASSED |
 
 ## Notes
 - The suite uses a real backend and verifies persisted rows, so these are integration-style UI tests rather than pure unit tests.
