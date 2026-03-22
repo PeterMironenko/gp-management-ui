@@ -1,0 +1,14 @@
+# UI-to-database test dependencies for gp-management-ui
+pytest>=7.4
+pytest-qt>=4.2
+requests
+PyQt5>=5.15
+# Backend dependencies (needed by conftest.py to start the live Flask server)
+Flask
+Flask-Smorest
+Flask-JWT-Extended
+Flask-SQLAlchemy
+SQLAlchemy
+passlib
+marshmallow
+werkzeug
