@@ -326,10 +326,40 @@ Shared fixture `staff_patient` setup steps:
 ## How To Run
 From `gp-management-ui`:
 
+**On Linux and MacOS**
 ```bash
 pip install -r requirements-test.txt
 QT_QPA_PLATFORM=offscreen .venv/bin/python3 -m pytest -q
 ```
+
+**On Windows**
+```PowerShell
+pip install -r requirements-test.txt
+set QT_QPA_PLATFORM=offscreen
+.\.venv\Scripts\py.test.exe -m pytest -q
+```
+
+If you want to have report for each induvidual test, run command with additional *-v* option, like this:
+
+```PowerShell
+.\.venv\Scripts\py.test.exe -m pytest -q -v
+```
+
+You should see the output as below:
+
+```PowerShell
+tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_appears_in_db PASSED                                                                                                                                                                                                                                                                                [  3%]
+tests/test_ui_admin_patients_drugs.py::TestCreatePatient::test_create_patient_visible_in_table PASSED                                                                                                                                                                                                                                                                             [  6%]
+tests/test_ui_admin_patients_drugs.py::TestUpdatePatient::test_update_patient_persists_to_db PASSED                                                                                                                                                                                                                                                                               [  9%]
+tests/test_ui_admin_patients_drugs.py::TestDeletePatient::test_delete_patient_removes_from_db PASSED                                                                                                                                                                                                                                                                              [ 12%]
+tests/test_ui_admin_patients_drugs.py::TestCreateDrug::test_create_drug_appears_in_db PASSED                                                                                                                                                                                                                                                                                      [ 15%]
+tests/test_ui_admin_patients_drugs.py::TestCreateDrug::test_create_drug_visible_in_table PASSED                                                                                                                                                                                                                                                                                   [ 18%]
+tests/test_ui_admin_patients_drugs.py::TestUpdateDrug::test_update_drug_persists_to_db PASSED                                                                                                                                                                                                                                                                                     [ 21%]
+tests/test_ui_admin_patients_drugs.py::TestDeleteDrug::test_delete_drug_removes_from_db PASSED                                                                                                                                                                                                                                                                                    [ 25%]
+tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_empty_drug_name_gives_no_payload PASSED                                                                                                                                                                                                                                                                     [ 28%] 
+tests/test_ui_admin_patients_drugs.py::TestDrugDialogValidation::test_valid_drug_name_produces_payload PASSED  
+```
+
 
 ## Latest Test Results
 Execution date: 2026-03-22
