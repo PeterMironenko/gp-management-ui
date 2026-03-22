@@ -232,3 +232,64 @@ class TestStaffAppointmentsDelete:
             "SELECT id FROM appointments WHERE id = ?", (appointment_id,)
         ).fetchone()
         assert db_row is None, "Deleted appointment must not exist in the database"
+
+
+def test_staff_ui_patient_tab_details(qtbot, staff_window, db_conn):
+    """
+    Test the Staff UI Patient tab to ensure that right-clicking a patient record
+    displays the correct details and allows access to the following tabs:
+    - Edits
+    - Appointments
+    - Lab Records
+    - Medical Information
+    - Medication
+    """
+    # Access the "Patients" tab from the QTabWidget
+    tabs = staff_window.centralWidget()
+    patient_window = tabs.widget(1)  # Assuming "Patients" tab is the second tab
+
+    # Call the refresh_patients method
+    patient_window.refresh_patients()
+
+    # Select a patient record by right-clicking on the first row
+    patient_table = patient_window.centralWidget().findChild(QTableWidget, "patient_table")
+    qtbot.mouseClick(patient_table.viewport(), Qt.RightButton, pos=patient_table.visualRect(patient_table.model().index(0, 0)).center())
+
+    # Verify that the context menu appears
+    context_menu = patient_window.findChild(QMenu, "context_menu")
+    assert context_menu.isVisible(), "Context menu did not appear after right-clicking a patient record."
+
+    # Check that all required tabs are accessible
+    required_tabs = ["Edits", "Appointments", "Lab Records", "Medical Information", "Medication"]
+    for tab_name in required_tabs:
+        assert context_menu.findAction(tab_name) is not None, f"'{tab_name}' tab is missing in the context menu."
+
+    # Simulate clicking each tab and verify the corresponding dialog opens
+    for tab_name in required_tabs:
+        action = context_menu.findAction(tab_name)
+        qtbot.mouseClick(action, Qt.LeftButton)
+
+        # Verify the dialog for the tab is displayed
+        dialog = patient_window.findChild(QDialog, "open_dialog")
+        assert dialog is not None, f"Dialog for '{tab_name}' did not open."
+        assert dialog.windowTitle() == tab_name, f"Dialog title for '{tab_name}' is incorrect."
+
+        # Close the dialog after verification
+        dialog.close()
+
+    # Verify that no unexpected dialogs remain open
+    assert not patient_window.findChild(QDialog, "open_dialog"), "Some dialogs remained open after testing all tabs."
+
+    # Verify database consistency for the patient record
+    patient_id = patient_table.model().index(0, 0).data()
+    patient_record = db_conn.execute("SELECT * FROM patients WHERE id = ?", (patient_id,)).fetchone()
+    assert patient_record is not None, "Patient record does not exist in the database."
+
+    # Verify related data exists in the database
+    related_tables = ["appointments", "lab_records", "medical_information", "medications"]
+    for table in related_tables:
+        related_data = db_conn.execute(f"SELECT * FROM {table} WHERE patient_id = ?", (patient_id,)).fetchall()
+        assert len(related_data) > 0, f"No related data found in '{table}' for patient ID {patient_id}."
+
+    # Cleanup: Ensure no lingering state
+    patient_window.findChild(QDialog, "open_dialog").close()
