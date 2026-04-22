@@ -9,6 +9,13 @@ import jwt
 from typing import List
 
 
+if not hasattr(jwt, "decode"):
+    raise ImportError(
+        "PyJWT is required for gp-management-ui. Uninstall the conflicting 'jwt' package "
+        "and install 'PyJWT'."
+    )
+
+
 class ApiClient:
     """Client for authentication and CRUD operations against the GP backend API."""
 
